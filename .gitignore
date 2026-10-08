@@ -34,3 +34,7 @@ env/
 *~
 .DS_Store
 .aider*
+# ProjectLibre scratch files must never be committed. The only
+# exception is the small binary fixture the test-suite reads.
+*.pod
+!tests/fixtures/real.pod
