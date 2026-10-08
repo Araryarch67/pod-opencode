@@ -15,6 +15,7 @@ from pod_opencode.utils import (
     validate_task_inputs,
     check_effective_order,
     suggest_name,
+    find_cycle_uids,
     set_resource_max_units,
     ValidationError,
 )
@@ -226,6 +227,10 @@ def _apply_op(project, index, item, task_refs, res_refs):
         if lag is not None:
             builder.lag(lag)
         task.addPredecessor(builder)
+        if int(task.getUniqueID()) in find_cycle_uids(project):
+            raise OpError(
+                "INVALID_VALUE", f"operations[{index}]: link would create a cycle"
+            )
         return {"op": "link", "unique_id": int(task.getUniqueID())}
 
     if op == "unlink":

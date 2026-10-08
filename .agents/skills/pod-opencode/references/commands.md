@@ -99,4 +99,7 @@ pod-opencode check <file>
 
 Lints the file and prints `{"errors": [...], "warnings": [...], "summary": {...}}`.
 Exits 1 when any error is found, 0 otherwise. Read-only. Run it after a
-batch of edits and before opening the file in ProjectLibre.
+batch of edits and before opening the file in ProjectLibre. Error codes
+include `DANGLING_LINK`, `SELF_LINK`, `DEPENDENCY_CYCLE`,
+`FINISH_BEFORE_START`, `BROKEN_HIERARCHY`, `PERCENT_OUT_OF_RANGE`,
+and `ORPHAN_ASSIGNMENT`.

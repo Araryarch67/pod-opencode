@@ -19,6 +19,7 @@ from pod_opencode.utils import (
     to_java_datetime,
     validate_task_inputs,
     check_effective_order,
+    find_cycle_uids,
     units_to_java,
     ValidationError,
     jstr,
@@ -721,6 +722,10 @@ def link(
         if lag_duration is not None:
             builder.lag(lag_duration)
         task.addPredecessor(builder)
+        if int(task.getUniqueID()) in find_cycle_uids(project):
+            raise ValidationError(
+                "Link would create a dependency cycle; nothing was written"
+            )
 
         output_path = resolve_output_path(str(file_path), output, in_place)
         apply_project_name(project, project_name)

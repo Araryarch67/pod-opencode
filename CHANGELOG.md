@@ -41,6 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Updating start without finish can no longer leave a stale finish behind:
   the merged dates are validated and rejected with `INVALID_VALUE`.
 - `link` rejects self-links.
+- `link` (CLI and `run`) refuses links that would close a dependency
+  cycle, and `check` reports `DEPENDENCY_CYCLE` for foreign files.
 - Units are fractions end to end (`1.0` = 100%): assignment `--units`
   and resource `--max-units` used to write 100x too little into the
   file, and `--max-units` crashed outright (MPXJ 16 removed

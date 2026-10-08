@@ -1348,25 +1348,121 @@ class TestCliArgOrder:
 class TestUnitsSemantics:
     def test_bad_max_units_rejected(self, sample_pod_path, tmp_path):
         r = runner.invoke(
-            app, ["resources", "add", sample_pod_path, "--name", "Zed",
-                  "--max-units", "0", "--output", str(tmp_path / "o.xml")])
+            app,
+            [
+                "resources",
+                "add",
+                sample_pod_path,
+                "--name",
+                "Zed",
+                "--max-units",
+                "0",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
         assert r.exit_code == 1
         assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
 
     def test_fixture_units_are_fractions(self, sample_pod_path):
         data = json.loads(
-            runner.invoke(app, ["resources", "list", sample_pod_path]).stdout)
+            runner.invoke(app, ["resources", "list", sample_pod_path]).stdout
+        )
         assert data["resources"][0]["max_units"] == 1.0
         assigns = json.loads(
-            runner.invoke(app, ["assignments", "list", sample_pod_path]).stdout)
+            runner.invoke(app, ["assignments", "list", sample_pod_path]).stdout
+        )
         assert assigns["assignments"][0]["units"] == 1.0
 
     def test_assign_units_roundtrip(self, sample_pod_path, tmp_path):
         out = tmp_path / "u.xml"
-        assert runner.invoke(
-            app, ["tasks", "assign", sample_pod_path, "3", "1",
-                  "--units", "0.25", "--output", str(out)]).exit_code == 0
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "assign",
+                    sample_pod_path,
+                    "3",
+                    "1",
+                    "--units",
+                    "0.25",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
         data = json.loads(
-            runner.invoke(app, ["assignments", "list", str(out),
-                                "--task-id", "3"]).stdout)
+            runner.invoke(
+                app, ["assignments", "list", str(out), "--task-id", "3"]
+            ).stdout
+        )
         assert data["assignments"][-1]["units"] == 0.25
+
+
+class TestCycles:
+    def test_link_cycle_rejected(self, sample_pod_path, tmp_path):
+        out = tmp_path / "c.xml"
+        assert (
+            runner.invoke(
+                app, ["tasks", "link", sample_pod_path, "2", "1", "--output", str(out)]
+            ).exit_code
+            == 0
+        )
+        r = runner.invoke(
+            app,
+            ["tasks", "link", str(out), "1", "2", "--output", str(tmp_path / "o.xml")],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+        preds = json.loads(runner.invoke(app, ["tasks", "get", str(out), "1"]).stdout)[
+            "predecessors"
+        ]
+        assert preds == []
+
+    def test_check_flags_cycle(self, sample_pod_path, tmp_path):
+        import re
+
+        linked = tmp_path / "linked.xml"
+        assert (
+            runner.invoke(
+                app,
+                ["tasks", "link", sample_pod_path, "2", "1", "--output", str(linked)],
+            ).exit_code
+            == 0
+        )
+        xml = linked.read_text()
+        blocks = re.findall(r"<Task>.*?</Task>", xml, re.S)
+        task1 = next(b for b in blocks if "<UID>1</UID>" in b[:200])
+        link = "<PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink>"
+        patched = task1.replace("</DurationFormat>", "</DurationFormat>" + link, 1)
+        cyc = tmp_path / "cyc.xml"
+        cyc.write_text(xml.replace(task1, patched, 1))
+        r = runner.invoke(app, ["check", str(cyc)])
+        assert r.exit_code == 1
+        found = [
+            e for e in json.loads(r.stdout)["errors"] if e["code"] == "DEPENDENCY_CYCLE"
+        ]
+        assert len(found) == 1
+        assert "1" in found[0]["detail"] and "2" in found[0]["detail"]
+
+    def test_run_cycle_rejected_atomically(self, sample_pod_path, tmp_path):
+        out = tmp_path / "r.xml"
+        script = tmp_path / "cyc.json"
+        script.write_text(
+            json.dumps(
+                {
+                    "operations": [
+                        {"op": "link", "task": 2, "pred": 1},
+                        {"op": "link", "task": 1, "pred": 2},
+                    ]
+                }
+            )
+        )
+        r = runner.invoke(
+            app, ["run", sample_pod_path, str(script), "--output", str(out)]
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["failed_operation"] == 1
+        assert not out.exists()

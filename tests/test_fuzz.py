@@ -142,7 +142,17 @@ def _scenario(seed, start_file, tmp_path, ext, steps=30):
             cands = [u for u in uids if u != task]
             pred = rng.choice(cands)
             if (pred, "FS") not in _links(path, task):
-                _run(["tasks", "link", path, str(task), str(pred), "--output", path])
+                result = runner.invoke(
+                    app,
+                    ["tasks", "link", path, str(task), str(pred), "--output", path],
+                )
+                if result.exit_code == 1:
+                    # A cycle rejection is a valid outcome, not a failure.
+                    error = json.loads(result.stderr)
+                    assert error["code"] == "INVALID_VALUE", result.stderr
+                    assert "cycle" in error["error"], result.stderr
+                else:
+                    json.loads(result.stdout)
         elif op == "unlink" and uids:
             task = rng.choice(uids)
             existing = sorted(_links(path, task))

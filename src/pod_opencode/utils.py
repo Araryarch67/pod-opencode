@@ -247,3 +247,51 @@ def validate_task_inputs(start=None, finish=None, duration=None, percent_complet
     if start_dt and finish_dt and finish_dt < start_dt:
         raise ValidationError("finish date is before start date")
     return start_dt, finish_dt, dur
+
+
+def find_cycle_uids(project):
+    """Return sorted UniqueIDs involved in predecessor cycles (iterative DFS).
+
+    Follows predecessor edges between tasks present in the project.
+    Empty list means the link graph is acyclic.
+    """
+    edges = {}
+    for task in project.getTasks():
+        if task.getUniqueID() is None:
+            continue
+        uid = int(task.getUniqueID())
+        preds = []
+        for rel in task.getPredecessors():
+            pred = rel.getPredecessorTask()
+            if pred is not None and pred.getUniqueID() is not None:
+                preds.append(int(pred.getUniqueID()))
+        edges[uid] = preds
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {u: WHITE for u in edges}
+    cyclic = set()
+    for root in edges:
+        if color[root] != WHITE:
+            continue
+        color[root] = GRAY
+        path = [root]
+        stack = [(root, iter(edges[root]))]
+        while stack:
+            node, it = stack[-1]
+            descended = False
+            for nxt in it:
+                if nxt not in edges:
+                    continue
+                if color[nxt] == GRAY:
+                    cyclic.update(path[path.index(nxt):])
+                elif color[nxt] == WHITE:
+                    color[nxt] = GRAY
+                    path.append(nxt)
+                    stack.append((nxt, iter(edges[nxt])))
+                    descended = True
+                    break
+            if not descended:
+                color[node] = BLACK
+                stack.pop()
+                path.pop()
+    return sorted(cyclic)

@@ -4,7 +4,7 @@ import json
 import re
 
 from pod_opencode.reader import read_project
-from pod_opencode.utils import jstr
+from pod_opencode.utils import jstr, find_cycle_uids
 
 app = typer.Typer()
 
@@ -245,6 +245,17 @@ def check(
                         "An assignment references a missing task",
                     )
                 )
+
+        cyclic = find_cycle_uids(project)
+        if cyclic:
+            errors.append(
+                _finding(
+                    "DEPENDENCY_CYCLE",
+                    "error",
+                    None,
+                    f"Dependency cycle involving tasks {cyclic}",
+                )
+            )
 
         result = {
             "errors": errors,
