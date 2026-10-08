@@ -119,6 +119,23 @@ def to_java_datetime(dt):
     )
 
 
+def suggest_name(value, refs, project, kind="task"):
+    """Build a 'did you mean?' hint for an unresolved name or ref."""
+    import difflib
+
+    candidates = [k for k in refs if isinstance(k, str)]
+    if kind == "task":
+        candidates += [
+            jstr(t.getName()) for t in project.getTasks() if jstr(t.getName())
+        ]
+    else:
+        candidates += [
+            jstr(r.getName()) for r in project.getResources() if jstr(r.getName())
+        ]
+    close = difflib.get_close_matches(str(value), candidates, n=2, cutoff=0.6)
+    return f" (did you mean: {', '.join(close)})?" if close else ""
+
+
 def parse_duration(text):
     """Parse '5d', '40h', '2w' into an MPXJ Duration. Returns None if invalid."""
     import re

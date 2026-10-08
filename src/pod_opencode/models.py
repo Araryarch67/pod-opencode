@@ -92,6 +92,12 @@ class ImportSuccess(BaseModel):
     count: int
 
 
+class RunSuccess(BaseModel):
+    status: str = "ok"
+    output: str
+    results: List[dict]
+
+
 class ErrorResponse(BaseModel):
     error: str
     code: str

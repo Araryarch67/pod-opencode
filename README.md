@@ -33,6 +33,7 @@ Based on [pod-ai-cli](https://github.com/distractdiverge/pod-ai-cli) by distract
 - Assign resources to tasks, link predecessors (FS, SS, FF, SF with lag), import whole plans from one JSON file.
 - Compare two revisions with `diff`.
 - Lint a file with `check` before opening it in ProjectLibre.
+- Run whole scripts with `run`: many operations, one JVM session, one write.
 - Set the project name from the CLI, so ProjectLibre opens the file with the right title.
 - JSON on stdout for reads, JSON receipts for writes, JSON errors on stderr with stable codes.
 
@@ -132,6 +133,7 @@ pod-opencode tasks unassign <file> <task_uid> <resource_uid> [--project-name TEX
 pod-opencode tasks link <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--lag TEXT] [--project-name TEXT] --output <file.xml|file.pod>
 pod-opencode tasks unlink <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--project-name TEXT] --output <file.xml|file.pod>
 pod-opencode tasks import <file> <batch.json> [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode run <file> <script.json> [--project-name TEXT] --output <file.xml|file.pod>
 pod-opencode diff <old_file> <new_file>
 pod-opencode check <file>
 pod-opencode tasks assign <file> <task_uid> <resource_uid> [--units FLOAT] [--project-name TEXT] --output <file.xml|file.pod>
@@ -150,7 +152,7 @@ pod-opencode assignments list <file> [--task-id INT] [--resource-id INT]
 
 Notes:
 
-- `convert` is a group callback, so its options must come before the file arguments, as in the example above. The other commands accept options in any order.
+- Options parse in any position on every command.
 - Every write command accepts `--in-place` instead of `--output`: the input is copied to `<input>.bak`, then overwritten. The two flags cannot be combined.
 - `assignments list` is read-only for viewing. Mutations live under `tasks`: `assign`, `unassign`, `link`, `unlink`, `import` (batch format below).
 - A successful write prints `{"status": "ok", "output": "<path>", "affected_unique_id": N}`. Failures print `{"error": "...", "code": "..."}` on stderr, exactly one object per failure.
@@ -176,6 +178,34 @@ pod-opencode tasks import project.pod batch.json --output project.pod
 ```
 
 The first invalid item aborts the import and nothing is written.
+
+### Running scripts
+
+For multi-step edits, prefer one `run` call over chained commands. Each
+chained command pays a full JVM startup; `run` pays it once, validates
+everything in memory, and writes a single time:
+
+```bash
+pod-opencode run project.pod plan.json --output project.pod
+```
+
+```json
+{
+  "project_name": "Optional default name",
+  "operations": [
+    {"op": "add", "name": "Planning", "duration": "5d", "ref": "plan"},
+    {"op": "assign", "task": "plan", "resource": "Alice"},
+    {"op": "link", "task": 2, "pred": 1, "type": "FS"},
+    {"op": "rename", "project_name": "Final Name"}
+  ]
+}
+```
+
+Any op can address tasks and resources by UniqueID, `"ref"` label from
+an earlier op, or unambiguous name (unknown names get a "did you mean?"
+hint). Any failure aborts with `failed_operation` set and nothing is
+written. Supported ops: `add`, `update`, `delete`, `assign`,
+`unassign`, `link`, `unlink`, `resource_add`, `rename`.
 
 ### Comparing revisions
 

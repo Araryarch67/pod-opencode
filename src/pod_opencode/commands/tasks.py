@@ -431,22 +431,7 @@ def delete(
             if t.getUniqueID() is not None
         }
         project.removeTask(task)
-        # removeTask does not clean predecessor links pointing at removed
-        # tasks, which would linger as dangling links. Sweep them by UID.
-        gone = before - {
-            int(t.getUniqueID())
-            for t in project.getTasks()
-            if t.getUniqueID() is not None
-        }
-        for other in project.getTasks():
-            for rel in [r for r in other.getPredecessors()]:
-                pred = rel.getPredecessorTask()
-                if (
-                    pred is not None
-                    and pred.getUniqueID() is not None
-                    and int(pred.getUniqueID()) in gone
-                ):
-                    other.removePredecessor(pred, rel.getType(), rel.getLag())
+        _sweep_deleted_links(project, before)
         output_path = resolve_output_path(str(file_path), output, in_place)
         apply_project_name(project, project_name)
         write_output(project, output_path)
@@ -494,6 +479,26 @@ def _create_assignment(project, task, resource, units):
     new_uid = max(uids or [0]) + 1
     assignment.setUniqueID(jint(new_uid))
     return new_uid
+
+
+def _sweep_deleted_links(project, before_uids):
+    """Remove predecessor links pointing at tasks that no longer exist.
+
+    removeTask does not clean links from surviving tasks, which would
+    linger as dangling PredecessorLinks in the file.
+    """
+    gone = before_uids - {
+        int(t.getUniqueID()) for t in project.getTasks() if t.getUniqueID() is not None
+    }
+    for other in project.getTasks():
+        for rel in [r for r in other.getPredecessors()]:
+            pred = rel.getPredecessorTask()
+            if (
+                pred is not None
+                and pred.getUniqueID() is not None
+                and int(pred.getUniqueID()) in gone
+            ):
+                other.removePredecessor(pred, rel.getType(), rel.getLag())
 
 
 def _matching_assignments(project, task_uid, resource_uid):

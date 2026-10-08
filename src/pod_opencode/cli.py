@@ -2,15 +2,12 @@ import typer
 import atexit
 from pod_opencode import __version__
 from pod_opencode.jvm import start_jvm, shutdown_jvm
-from pod_opencode.commands import (
-    info,
-    convert,
-    tasks,
-    resources,
-    assignments,
-    diff,
-    check,
-)
+from pod_opencode.commands import tasks, resources, assignments
+from pod_opencode.commands.info import info as info_fn
+from pod_opencode.commands.convert import convert as convert_fn
+from pod_opencode.commands.diff import diff as diff_fn
+from pod_opencode.commands.check import check as check_fn
+from pod_opencode.commands.run import run as run_fn
 
 app = typer.Typer(help="CLI for reading and modifying ProjectLibre POD files via MPXJ")
 
@@ -37,13 +34,17 @@ def main(
     atexit.register(shutdown_jvm)
 
 
-app.add_typer(info.app, name="info", help="Display project metadata")
-app.add_typer(convert.app, name="convert", help="Convert POD/XML to MSPDI XML")
 app.add_typer(tasks.app, name="tasks", help="Manage tasks")
 app.add_typer(resources.app, name="resources", help="Manage resources")
 app.add_typer(assignments.app, name="assignments", help="View resource assignments")
-app.add_typer(diff.app, name="diff", help="Compare two project files")
-app.add_typer(check.app, name="check", help="Lint a project file")
+
+# Single-action groups are registered as real commands so options parse
+# in any position (group callbacks only accept options before arguments).
+app.command("info", help="Display project metadata")(info_fn)
+app.command("convert", help="Convert POD/XML to MSPDI XML or native POD")(convert_fn)
+app.command("diff", help="Compare two project files")(diff_fn)
+app.command("check", help="Lint a project file")(check_fn)
+app.command("run", help="Run many operations from a JSON script")(run_fn)
 
 
 if __name__ == "__main__":

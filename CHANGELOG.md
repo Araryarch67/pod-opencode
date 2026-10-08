@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   project naming.
 - `diff` command to compare two project files (renames, added/removed
   items, per-field changes, summary counts).
+- `run` command: many operations from one JSON script in a single JVM
+  session, with ref labels, did-you-mean hints, per-op receipts, and
+  all-or-nothing writes.
+- Single-action commands (`info`, `convert`, `diff`, `check`, `run`) are
+  real commands now, so options parse in any position.
 - `check` command to lint a file (dangling/self links, finish before
   start, broken hierarchy, out-of-range percents, missing dates,
   unassigned tasks, duplicate names), including raw-XML detection of

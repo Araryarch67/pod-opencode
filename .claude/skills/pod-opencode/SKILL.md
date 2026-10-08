@@ -48,7 +48,7 @@ If already inside this repo, just `pip install -e .`. Requires Java JRE on PATH.
 
 ```bash
 pod-opencode info <file>
-pod-opencode convert [--project-name TEXT] <input.pod|xml> <output.xml|output.pod>   # option before file args
+pod-opencode convert [--project-name TEXT] <input.pod|xml> <output.xml|output.pod>
 
 pod-opencode tasks list <file> [--filter-name TEXT]
 pod-opencode tasks get <file> <unique_id>
@@ -69,6 +69,7 @@ pod-opencode resources delete <file> <unique_id> [--project-name TEXT] --output 
 pod-opencode assignments list <file> [--task-id INT] [--resource-id INT]
 
 pod-opencode tasks import <file> <batch.json> [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode run <file> <script.json> [--project-name TEXT] --output <out.xml|out.pod>
 pod-opencode diff <old> <new>
 pod-opencode check <file>
 ```
@@ -78,18 +79,22 @@ Every write command also accepts `--in-place` instead of `--output`: the input i
 `--project-name` sets the project name shown as the window title in ProjectLibre. Set it once on `convert` (or any write); it persists in the file for chained edits.
 
 Full flags and JSON schemas: see `references/commands.md` and `references/json-schemas.md`.
-Batch file format: `references/batch.md`.
+Batch file format: `references/batch.md`. Run script format: `references/run.md`.
 
 ## Typical workflow
 
 1. `pod-opencode info project.pod` (confirm file loads, note task/resource counts).
 2. `pod-opencode tasks list project.pod` (find `unique_id` values).
-3. Mutate with `--output /tmp/out.xml`, e.g.:
+3. For one change, mutate with `--output /tmp/out.xml`, e.g.:
    ```bash
    pod-opencode tasks add project.pod --name "New Task" --start 2025-07-01 --duration "5d" --output /tmp/out.xml
    ```
-4. Chain edits off the **latest** `.xml` (each write produces a new full snapshot).
+   For several changes, prefer ONE `run` call with a script (one JVM
+   start, validated upfront, a single write at the end, per-op receipts).
+   Script format: `references/run.md`.
+4. Chain edits off the **latest** file (each write produces a new full snapshot).
 5. Report the output path and `affected_unique_id` from the `{"status":"ok", ...}` response.
+6. Run `pod-opencode check` on the result before handing it over.
 
 POD→XML round-trip details: `references/roundtrip.md`.
 

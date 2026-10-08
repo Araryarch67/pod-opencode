@@ -16,7 +16,7 @@ pod-opencode info <file>
 pod-opencode convert [--project-name TEXT] <input_file> <output.xml|output.pod>
 ```
 
-Converts POD/XML to MSPDI XML (`.xml`) or native ProjectLibre `.pod`. For `convert`, options must precede the file arguments. `--project-name` sets the project name shown as the window title in ProjectLibre.
+Converts POD/XML to MSPDI XML (`.xml`) or native ProjectLibre `.pod`. `--project-name` sets the project name shown as the window title in ProjectLibre.
 
 ## project name
 
@@ -70,6 +70,16 @@ pod-opencode assignments list <file> [--task-id INT] [--resource-id INT]
 ```
 
 Mutations live under `tasks`: `assign`, `unassign`, `link`, `unlink`.
+
+## run
+
+```bash
+pod-opencode run <file> <script.json> [--project-name TEXT] --output <file.xml|file.pod>
+```
+
+Many operations in one JVM session with per-op receipts, validated
+upfront and written once at the end. Script format: run.md. Name
+precedence: file default, then `rename` ops, then the flag.
 
 ## diff
 

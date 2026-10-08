@@ -1138,3 +1138,191 @@ class TestCheck:
         task = json.loads(runner.invoke(app, ["tasks", "get", str(out), "1"]).stdout)
         assert task["start"] == "2026-12-01"
         assert task["finish"] == "2026-12-05"
+
+
+class TestRun:
+    SCRIPT = {
+        "project_name": "RunDemo",
+        "operations": [
+            {
+                "op": "add",
+                "name": "Fase 1",
+                "start": "2026-10-12",
+                "duration": "5d",
+                "ref": "p1",
+            },
+            {
+                "op": "add",
+                "name": "Kickoff",
+                "duration": "1d",
+                "parent": "p1",
+                "ref": "k1",
+            },
+            {"op": "add", "name": "M1", "milestone": True, "parent": "Fase 1"},
+            {"op": "resource_add", "name": "Budi", "ref": "budi"},
+            {"op": "assign", "task": "k1", "resource": "budi", "units": 0.5},
+            {"op": "link", "task": "M1", "pred": "k1"},
+            {"op": "update", "ref": "p1", "percent_complete": 10},
+            {"op": "rename", "project_name": "RunFinal"},
+        ],
+    }
+
+    def _script(self, tmp_path, data):
+        p = tmp_path / "run.json"
+        p.write_text(json.dumps(data))
+        return str(p)
+
+    def test_full_script(self, real_pod_path, tmp_path):
+        out = tmp_path / "run.pod"
+        r = runner.invoke(
+            app,
+            [
+                "run",
+                real_pod_path,
+                self._script(tmp_path, self.SCRIPT),
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 0
+        data = json.loads(r.stdout)
+        assert [x["op"] for x in data["results"]] == [
+            "add",
+            "add",
+            "add",
+            "resource_add",
+            "assign",
+            "link",
+            "update",
+            "rename",
+        ]
+        assert (
+            json.loads(runner.invoke(app, ["info", str(out)]).stdout)["name"]
+            == "RunFinal"
+        )
+        tasks = {
+            t["name"]: t
+            for t in json.loads(runner.invoke(app, ["tasks", "list", str(out)]).stdout)[
+                "tasks"
+            ]
+        }
+        assert tasks["Kickoff"]["parent_id"] == tasks["Fase 1"]["unique_id"]
+        assert tasks["Kickoff"]["resource_names"] == ["Budi"]
+        assert (
+            tasks["M1"]["predecessors"][0]["task_unique_id"]
+            == tasks["Kickoff"]["unique_id"]
+        )
+        assert tasks["Fase 1"]["percent_complete"] == 10.0
+        assert runner.invoke(app, ["check", str(out)]).exit_code == 0
+
+    def test_atomic_abort_writes_nothing(self, real_pod_path, tmp_path):
+        out = tmp_path / "atomic.pod"
+        r = runner.invoke(
+            app,
+            [
+                "run",
+                real_pod_path,
+                self._script(
+                    tmp_path,
+                    {
+                        "operations": [
+                            {"op": "add", "name": "OK1"},
+                            {"op": "add"},
+                            {"op": "add", "name": "Never"},
+                        ]
+                    },
+                ),
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 1
+        error = json.loads(r.stderr)
+        assert error["failed_operation"] == 1
+        assert not out.exists()
+
+    def test_did_you_mean(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "run",
+                sample_pod_path,
+                self._script(
+                    tmp_path,
+                    {
+                        "operations": [
+                            {"op": "assign", "task": "Planing", "resource": "Alice"}
+                        ]
+                    },
+                ),
+                "--output",
+                str(tmp_path / "o.pod"),
+            ],
+        )
+        assert r.exit_code == 1
+        error = json.loads(r.stderr)
+        assert error["code"] == "TASK_NOT_FOUND"
+        assert "did you mean" in error["error"] and "Planning" in error["error"]
+
+    def test_delete_and_sweep_in_run(self, sample_pod_path, tmp_path):
+        out = tmp_path / "r.xml"
+        script = {
+            "operations": [
+                {"op": "link", "task": 2, "pred": 1},
+                {"op": "delete", "unique_id": 1},
+            ]
+        }
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "run",
+                    sample_pod_path,
+                    self._script(tmp_path, script),
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        assert runner.invoke(app, ["check", str(out)]).exit_code == 0
+
+    def test_in_place_run(self, real_pod_path, tmp_path):
+        target = tmp_path / "w.pod"
+        target.write_bytes(Path(real_pod_path).read_bytes())
+        r = runner.invoke(
+            app,
+            [
+                "run",
+                str(target),
+                self._script(tmp_path, {"operations": [{"op": "add", "name": "Solo"}]}),
+                "--in-place",
+            ],
+        )
+        assert r.exit_code == 0
+        assert (tmp_path / "w.pod.bak").exists()
+        assert (
+            json.loads(runner.invoke(app, ["info", str(target)]).stdout)["name"]
+            == "testing-file"
+        )
+
+
+class TestCliArgOrder:
+    def test_options_after_positionals(self, sample_pod_path, tmp_path):
+        out = tmp_path / "o.xml"
+        r = runner.invoke(
+            app, ["convert", sample_pod_path, str(out), "--project-name", "Bebas"]
+        )
+        assert r.exit_code == 0
+        assert (
+            json.loads(runner.invoke(app, ["info", str(out)]).stdout)["name"] == "Bebas"
+        )
+
+    def test_run_options_after_positionals(self, real_pod_path, tmp_path):
+        out = tmp_path / "o.pod"
+        script = tmp_path / "r.json"
+        script.write_text(json.dumps({"operations": [{"op": "add", "name": "X"}]}))
+        r = runner.invoke(
+            app, ["run", real_pod_path, str(script), "--output", str(out)]
+        )
+        assert r.exit_code == 0
