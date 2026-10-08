@@ -26,13 +26,18 @@ java -version            # must exist (JRE 8+)
 pod-opencode --help      # must exist
 ```
 
-If `pod-opencode` is not found, clone and install first, then continue:
+If `pod-opencode` is not found, install it first, then continue:
 
 ```bash
-git clone https://github.com/Araryarch67/pod-opencode.git
-cd pod-opencode
-pip install -e .
+pip install pod-opencode
 pod-opencode --help      # verify install
+```
+
+No PyPI access, or want the skill installed everywhere too? Run the
+bootstrap from a checkout (or via curl, see README):
+
+```bash
+./scripts/bootstrap.sh
 ```
 
 If already inside this repo, just `pip install -e .`. Requires Java JRE on PATH. First run may be slow (MPXJ init).

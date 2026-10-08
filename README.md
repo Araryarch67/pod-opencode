@@ -47,7 +47,13 @@ This repo ships a `pod-opencode` skill, pre-installed for project-local discover
 | Codex, Cursor, generic agents | `.agents/skills/pod-opencode/SKILL.md`, `.codex/skills/pod-opencode/SKILL.md` |
 | Skill registries (`npx skills add`) | `skills/pod-opencode/SKILL.md` (canonical source) |
 
-For other projects, install globally with `./scripts/install-skill.sh`, then invoke `@pod-opencode`. If the CLI is missing, the skill tells the agent to clone this repo and install it.
+For other projects, one command installs the CLI and applies the skill to every detected agent:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Araryarch67/pod-opencode/main/scripts/bootstrap.sh | bash -s --
+```
+
+From a checkout, `./scripts/bootstrap.sh` does the same (`./scripts/install-skill.sh` installs only the skill). Restart the agent and check that `pod-opencode` shows up, or invoke it explicitly with `@pod-opencode`. If the CLI is missing, the skill tells the agent to `pip install pod-opencode`.
 
 ## Installation
 

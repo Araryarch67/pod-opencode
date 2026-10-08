@@ -20,7 +20,7 @@ Converts POD/XML to MSPDI XML (`.xml`) or native ProjectLibre `.pod`. `--project
 
 ## project name
 
-Every write command (`convert`, `tasks add/update/delete/import/assign/unassign/link/unlink`, `resources add/update/delete`) accepts `--project-name TEXT` and `--in-place`. The name sets the project's Name and Title, which is what ProjectLibre displays in its title bar (the file name alone does not change it). Set once; the name persists in the output file for chained edits.
+Every write command (`convert`, `tasks add/update/delete/import/assign/unassign/link/unlink`, `run`, `resources add/update/delete`) accepts `--project-name TEXT` and `--in-place`. The name sets the project's Name and Title, which is what ProjectLibre displays in its title bar (the file name alone does not change it). Set once; the name persists in the output file for chained edits.
 
 ## pod output
 
