@@ -6,6 +6,8 @@ from pod_opencode.cli import app
 
 runner = CliRunner()
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
 
 class TestInfoCommand:
     def test_info_outputs_json(self, sample_pod_path):
@@ -881,11 +883,11 @@ class TestCliConsistency:
     def test_error_output_is_single_json(self):
         cases = [
             ["info", "/nonexistent/x.pod"],
-            ["tasks", "get", "tests/fixtures/sample.xml", "999"],
+            ["tasks", "get", str(FIXTURES / "sample.xml"), "999"],
             [
                 "tasks",
                 "update",
-                "tests/fixtures/sample.xml",
+                str(FIXTURES / "sample.xml"),
                 "1",
                 "--percent-complete",
                 "500",
@@ -895,7 +897,7 @@ class TestCliConsistency:
             [
                 "tasks",
                 "link",
-                "tests/fixtures/sample.xml",
+                str(FIXTURES / "sample.xml"),
                 "2",
                 "1",
                 "--type",
@@ -906,13 +908,13 @@ class TestCliConsistency:
             [
                 "tasks",
                 "unlink",
-                "tests/fixtures/sample.xml",
+                str(FIXTURES / "sample.xml"),
                 "2",
                 "1",
                 "--output",
                 "/tmp/opencode/o.xml",
             ],
-            ["diff", "tests/fixtures/sample.xml", "/nonexistent/y.xml"],
+            ["diff", str(FIXTURES / "sample.xml"), "/nonexistent/y.xml"],
         ]
         for args in cases:
             r = runner.invoke(app, args)
@@ -925,7 +927,7 @@ class TestCheck:
     def _mutated(self, tmp_path, mutate, name="broken.xml"):
         import re
 
-        xml = Path("tests/fixtures/sample.xml").read_text()
+        xml = Path(FIXTURES / "sample.xml").read_text()
         out = tmp_path / name
         out.write_text(mutate(xml))
         return str(out)
@@ -1466,3 +1468,15 @@ class TestCycles:
         assert r.exit_code == 1
         assert json.loads(r.stderr)["failed_operation"] == 1
         assert not out.exists()
+
+
+class TestVersion:
+    def test_version_long(self):
+        r = runner.invoke(app, ["--version"])
+        assert r.exit_code == 0
+        assert "0.2.0" in r.stdout
+
+    def test_version_short(self):
+        r = runner.invoke(app, ["-v"])
+        assert r.exit_code == 0
+        assert "0.2.0" in r.stdout

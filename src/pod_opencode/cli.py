@@ -1,5 +1,6 @@
 import typer
 import atexit
+from typing import Optional
 from pod_opencode import __version__
 from pod_opencode.jvm import start_jvm, shutdown_jvm
 from pod_opencode.commands import tasks, resources, assignments
@@ -12,21 +13,21 @@ from pod_opencode.commands.run import run as run_fn
 app = typer.Typer(help="CLI for reading and modifying ProjectLibre POD files via MPXJ")
 
 
+def _show_version():
+    typer.echo(f"pod-opencode {__version__}")
+    raise typer.Exit()
+
+
 @app.callback(invoke_without_command=False)
 def main(
     ctx: typer.Context,
-    version: bool = typer.Option(
+    version: Optional[bool] = typer.Option(
         None,
         "--version",
         "-v",
         help="Show version and exit",
-        is_flag=True,
         is_eager=True,
-        callback=lambda ctx, param, value: (
-            (typer.echo(f"pod-opencode {__version__}"), typer.Exit(0))
-            if value
-            else None
-        ),
+        callback=lambda ctx, param, value: _show_version() if value else None,
     ),
 ):
     """Initialize JVM and register atexit cleanup."""

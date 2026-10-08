@@ -16,6 +16,8 @@ from pod_opencode.cli import app
 
 runner = CliRunner()
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
 TYPES = ["FS", "SS", "FF", "SF"]
 
 
@@ -170,41 +172,41 @@ def _scenario(seed, start_file, tmp_path, ext, steps=30):
 
 class TestFuzzXml:
     def test_seed_1(self, tmp_path):
-        _scenario(1, "tests/fixtures/sample.xml", tmp_path, ".xml")
+        _scenario(1, str(FIXTURES / "sample.xml"), tmp_path, ".xml")
 
     def test_seed_2(self, tmp_path):
-        _scenario(2, "tests/fixtures/sample.xml", tmp_path, ".xml")
+        _scenario(2, str(FIXTURES / "sample.xml"), tmp_path, ".xml")
 
     def test_seed_3(self, tmp_path):
-        _scenario(3, "tests/fixtures/sample.xml", tmp_path, ".xml")
+        _scenario(3, str(FIXTURES / "sample.xml"), tmp_path, ".xml")
 
     def test_seed_4(self, tmp_path):
-        _scenario(4, "tests/fixtures/sample.xml", tmp_path, ".xml", steps=50)
+        _scenario(4, str(FIXTURES / "sample.xml"), tmp_path, ".xml", steps=50)
 
     def test_seed_5(self, tmp_path):
-        _scenario(5, "tests/fixtures/sample.xml", tmp_path, ".xml", steps=50)
+        _scenario(5, str(FIXTURES / "sample.xml"), tmp_path, ".xml", steps=50)
 
 
 class TestFuzzPod:
     def test_seed_1(self, tmp_path):
-        _scenario(1, "tests/fixtures/real.pod", tmp_path, ".pod")
+        _scenario(1, str(FIXTURES / "real.pod"), tmp_path, ".pod")
 
     def test_seed_2(self, tmp_path):
-        _scenario(2, "tests/fixtures/real.pod", tmp_path, ".pod")
+        _scenario(2, str(FIXTURES / "real.pod"), tmp_path, ".pod")
 
     def test_seed_3(self, tmp_path):
-        _scenario(3, "tests/fixtures/real.pod", tmp_path, ".pod")
+        _scenario(3, str(FIXTURES / "real.pod"), tmp_path, ".pod")
 
     def test_seed_4(self, tmp_path):
-        _scenario(4, "tests/fixtures/real.pod", tmp_path, ".pod", steps=50)
+        _scenario(4, str(FIXTURES / "real.pod"), tmp_path, ".pod", steps=50)
 
     def test_seed_5(self, tmp_path):
-        _scenario(5, "tests/fixtures/real.pod", tmp_path, ".pod", steps=50)
+        _scenario(5, str(FIXTURES / "real.pod"), tmp_path, ".pod", steps=50)
 
 
 class TestCrossFormatFidelity:
     def test_xml_pod_xml_roundtrip(self, tmp_path):
-        first = _scenario(7, "tests/fixtures/sample.xml", tmp_path, ".xml", steps=10)
+        first = _scenario(7, str(FIXTURES / "sample.xml"), tmp_path, ".xml", steps=10)
         tasks_xml = _run(["tasks", "list", first])["tasks"]
         res_xml = _run(["resources", "list", first])["resources"]
         pod = str(tmp_path / "mid.pod")
@@ -272,10 +274,10 @@ class TestNegativeFuzz:
     ]
 
     def test_bad_cases_xml(self, tmp_path):
-        self._run_bad("tests/fixtures/sample.xml", tmp_path, ".xml")
+        self._run_bad(str(FIXTURES / "sample.xml"), tmp_path, ".xml")
 
     def test_bad_cases_pod(self, tmp_path):
-        self._run_bad("tests/fixtures/real.pod", tmp_path, ".pod")
+        self._run_bad(str(FIXTURES / "real.pod"), tmp_path, ".pod")
 
     def _run_bad(self, fixture, tmp_path, ext):
         import shutil
@@ -296,7 +298,7 @@ class TestNegativeFuzz:
         import shutil
 
         src = str(tmp_path / "neg.xml")
-        shutil.copy("tests/fixtures/sample.xml", src)
+        shutil.copy(str(FIXTURES / "sample.xml"), src)
         bad_scripts = [
             {"operations": []},
             {"operations": [{"op": "nope"}]},
