@@ -174,6 +174,15 @@ class TestRealPodFile:
         assert result.exit_code == 0
         assert json.loads(result.stdout)["name"] == "testing-file"
 
+    def test_unsupported_file_gives_clean_error(self, tmp_path):
+        bad = tmp_path / "bad.pod"
+        bad.write_bytes(b"\x00\x01\x02not a project file")
+        result = runner.invoke(app, ["info", str(bad)])
+        assert result.exit_code == 1
+        error = json.loads(result.stderr)
+        assert error["code"] == "READ_ERROR"
+        assert "NoneType" not in error["error"]
+
     def test_tasks_list_real_pod(self, real_pod_path):
         result = runner.invoke(app, ["tasks", "list", real_pod_path])
         assert result.exit_code == 0
