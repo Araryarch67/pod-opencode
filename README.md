@@ -1,10 +1,12 @@
-# pod-opencode
+<div align="center">
+  <h1>pod-opencode</h1>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
+  <a href="https://pypi.org/project/pod-opencode/"><img src="https://img.shields.io/pypi/v/pod-opencode.svg" alt="PyPI version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+  <p>A Python CLI for reading and writing ProjectLibre <code>.pod</code> files via MPXJ, built so AI assistants can work with project schedules through shell commands.</p>
+</div>
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyPI version](https://img.shields.io/pypi/v/pod-opencode.svg)](https://pypi.org/project/pod-opencode/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-A Python CLI for reading and writing ProjectLibre `.pod` files via MPXJ, built so AI assistants can work with project schedules through shell commands. Reads print one JSON object, writes return one JSON receipt.
+Reads print one JSON object, writes return one JSON receipt.
 
 Based on [pod-ai-cli](https://github.com/distractdiverge/pod-ai-cli) by distractdiverge. See [Credits](#credits).
 
