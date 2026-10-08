@@ -1,6 +1,6 @@
 ---
 name: pod-opencode
-description: Read and modify ProjectLibre .pod / MSPDI XML project schedules via the pod-opencode CLI. Use when working with .pod or MSPDI .xml files to list, get, add, update, or delete tasks and resources, view assignments, get project info, or convert POD to XML. All read output is JSON.
+description: Read and modify ProjectLibre .pod / MSPDI XML schedules via the pod-opencode CLI (tasks, resources, assignments, dependencies, batch import, scripted runs, diff, lint). Use for any .pod or MSPDI .xml work. All output is JSON.
 license: MIT
 compatibility: Requires Python 3.10+, Java JRE 8+, and the pod-opencode package installed.
 metadata:
@@ -39,10 +39,11 @@ If already inside this repo, just `pip install -e .`. Requires Java JRE on PATH.
 
 ## Core rules
 
-1. **Read `.pod` or `.xml`, write `.xml` or `.pod`.** `.xml` output is plain MSPDI. `.pod` output is the native ProjectLibre container (placeholder header + separator + embedded MSPDI); MPXJ reads it back, and ProjectLibre opens it via its XML recovery path. If ProjectLibre ever refuses a generated `.pod`, fall back to `.xml` (File > Open works) and report it.
-2. **Use UniqueID, not ID.** `get` / `update` / `delete` take `unique_id` (stable). `id` is sequential and may shift.
-3. **Dates are ISO 8601**: `--start 2025-07-01`. Durations are MPXJ human format: `5d`, `40h`, `2w`.
+1. **Read `.pod` or `.xml`, write `.xml` or `.pod`.** Both outputs open in ProjectLibre. Prefer `.pod` when the user will open the file directly.
+2. **Use UniqueID, not ID.** Every `get` / `update` / `delete` / `assign` / `link` command takes UniqueIDs. Never guess one: run `tasks list` (or `resources list`) first, then use the exact `unique_id` values returned.
+3. **Dates are ISO 8601** (`--start 2025-07-01`). **Durations** look like `5d`, `40h`, `2w`. **Units are fractions** (`1.0` is full time). **`--percent-complete`** takes 0-100.
 4. **Parse stdout as JSON.** Never scrape human text; there is none.
+5. **One change: single command. Several changes: ONE `run` call.** Chained commands each pay a JVM startup and can leave half-applied work; `run` validates everything upfront and writes once. Format: `references/run.md`.
 
 ## Commands
 
@@ -80,25 +81,26 @@ Every write command also accepts `--in-place` instead of `--output`: the input i
 
 Full flags and JSON schemas: see `references/commands.md` and `references/json-schemas.md`.
 Batch file format: `references/batch.md`. Run script format: `references/run.md`.
+Chaining rules: `references/roundtrip.md`.
 
 ## Typical workflow
 
-1. `pod-opencode info project.pod` (confirm file loads, note task/resource counts).
-2. `pod-opencode tasks list project.pod` (find `unique_id` values).
-3. For one change, mutate with `--output /tmp/out.xml`, e.g.:
-   ```bash
-   pod-opencode tasks add project.pod --name "New Task" --start 2025-07-01 --duration "5d" --output /tmp/out.xml
-   ```
-   For several changes, prefer ONE `run` call with a script (one JVM
-   start, validated upfront, a single write at the end, per-op receipts).
-   Script format: `references/run.md`.
-4. Chain edits off the **latest** file (each write produces a new full snapshot).
-5. Report the output path and `affected_unique_id` from the `{"status":"ok", ...}` response.
-6. Run `pod-opencode check` on the result before handing it over.
-
-POD→XML round-trip details: `references/roundtrip.md`.
+1. `pod-opencode info project.pod` (confirm the file loads, note task/resource counts).
+2. `pod-opencode tasks list project.pod` (collect the exact `unique_id` values you will reference).
+3. Do the work:
+   - one change: a single command with `--output /tmp/out.pod`, e.g.:
+     ```bash
+     pod-opencode tasks add project.pod --name "New Task" --start 2025-07-01 --duration "5d" --output /tmp/out.pod
+     ```
+   - several changes: ONE `run` call (see rule 5 and `references/run.md`).
+   - many new tasks at once: `tasks import` (see `references/batch.md`).
+4. Keep editing the **latest** output (each write is a complete new snapshot, never a delta).
+5. Run `pod-opencode check` on the result. Fix reported errors, then hand over the output path.
 
 ## Error handling
 
-- `FILE_NOT_FOUND`, invalid ID, or `.pod` as `--output` → JSON on stderr, non-zero exit. Fix args and retry; do not hand-edit XML.
-- JVM errors (`JPype`, `Java`) → Java missing or MPXJ init failed; run `scripts/check-env.py` and report.
+- Any failure prints exactly one `{"error": ..., "code": ...}` object on stderr with a non-zero exit. Fix the arguments and retry; do not hand-edit XML or `.pod` bytes.
+- `INVALID_VALUE` means a bad flag value (dates, durations, percents, unknown type). Nothing was written.
+- `TASK_NOT_FOUND`, `RESOURCE_NOT_FOUND`, `ASSIGNMENT_NOT_FOUND`, `LINK_NOT_FOUND` name the missing item. In `run` scripts, unknown names add a "did you mean?" hint.
+- `run` failures add `failed_operation` (the index that failed); nothing was written.
+- JVM errors (`JPype`, `Java`) mean Java is missing or MPXJ init failed; run `scripts/check-env.py` and report.
