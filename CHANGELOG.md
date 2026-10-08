@@ -41,6 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Updating start without finish can no longer leave a stale finish behind:
   the merged dates are validated and rejected with `INVALID_VALUE`.
 - `link` rejects self-links.
+- Units are fractions end to end (`1.0` = 100%): assignment `--units`
+  and resource `--max-units` used to write 100x too little into the
+  file, and `--max-units` crashed outright (MPXJ 16 removed
+  `setMaxUnits`; availability now goes through the date-range table).
 
 ## [0.2.0] - 2026-10-09
 

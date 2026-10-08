@@ -795,6 +795,8 @@ class TestRoundTrip:
                 "Zed",
                 "--email",
                 "z@x.com",
+                "--max-units",
+                "0.5",
                 "--output",
                 str(out),
             ],
@@ -806,6 +808,7 @@ class TestRoundTrip:
             runner.invoke(app, ["resources", "get", str(out), str(uid)]).stdout
         )
         assert res["name"] == "Zed"
+        assert res["max_units"] == 0.5
         assert (
             runner.invoke(
                 app,
@@ -950,10 +953,17 @@ class TestCheck:
 
     def test_dangling_link(self, tmp_path):
         link = "<PredecessorLink><PredecessorUID>999</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink>"
-        path = self._mutated(
-            tmp_path,
-            lambda xml: xml.replace("</DurationFormat>", "</DurationFormat>" + link, 1),
-        )
+
+        def mutate(xml):
+            head, sep, tail = xml.partition("<Tasks>")
+            assert sep, "no Tasks block"
+            return (
+                head
+                + sep
+                + tail.replace("</DurationFormat>", "</DurationFormat>" + link, 1)
+            )
+
+        path = self._mutated(tmp_path, mutate)
         r = runner.invoke(app, ["check", path])
         assert r.exit_code == 1
         found = [
@@ -963,10 +973,17 @@ class TestCheck:
 
     def test_self_link(self, tmp_path):
         link = "<PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink>"
-        path = self._mutated(
-            tmp_path,
-            lambda xml: xml.replace("</DurationFormat>", "</DurationFormat>" + link, 1),
-        )
+
+        def mutate(xml):
+            head, sep, tail = xml.partition("<Tasks>")
+            assert sep, "no Tasks block"
+            return (
+                head
+                + sep
+                + tail.replace("</DurationFormat>", "</DurationFormat>" + link, 1)
+            )
+
+        path = self._mutated(tmp_path, mutate)
         r = runner.invoke(app, ["check", path])
         assert r.exit_code == 1
         assert "SELF_LINK" in [e["code"] for e in json.loads(r.stdout)["errors"]]
@@ -1326,3 +1343,30 @@ class TestCliArgOrder:
             app, ["run", real_pod_path, str(script), "--output", str(out)]
         )
         assert r.exit_code == 0
+
+
+class TestUnitsSemantics:
+    def test_bad_max_units_rejected(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app, ["resources", "add", sample_pod_path, "--name", "Zed",
+                  "--max-units", "0", "--output", str(tmp_path / "o.xml")])
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+    def test_fixture_units_are_fractions(self, sample_pod_path):
+        data = json.loads(
+            runner.invoke(app, ["resources", "list", sample_pod_path]).stdout)
+        assert data["resources"][0]["max_units"] == 1.0
+        assigns = json.loads(
+            runner.invoke(app, ["assignments", "list", sample_pod_path]).stdout)
+        assert assigns["assignments"][0]["units"] == 1.0
+
+    def test_assign_units_roundtrip(self, sample_pod_path, tmp_path):
+        out = tmp_path / "u.xml"
+        assert runner.invoke(
+            app, ["tasks", "assign", sample_pod_path, "3", "1",
+                  "--units", "0.25", "--output", str(out)]).exit_code == 0
+        data = json.loads(
+            runner.invoke(app, ["assignments", "list", str(out),
+                                "--task-id", "3"]).stdout)
+        assert data["assignments"][-1]["units"] == 0.25

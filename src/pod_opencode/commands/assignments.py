@@ -5,7 +5,7 @@ from typing import Optional
 
 from pod_opencode.reader import read_project
 from pod_opencode.models import AssignmentInfo, AssignmentListResponse
-from pod_opencode.utils import java_date_to_iso, duration_to_str, jstr
+from pod_opencode.utils import java_date_to_iso, duration_to_str, jstr, units_from_java
 
 app = typer.Typer()
 
@@ -21,7 +21,7 @@ def _assignment_to_info(assignment) -> AssignmentInfo:
         task_name=jstr(task.getName()) if task else None,
         resource_unique_id=resource.getUniqueID() if resource else None,
         resource_name=jstr(resource.getName()) if resource else None,
-        units=assignment.getUnits(),
+        units=units_from_java(assignment.getUnits()),
         work=duration_to_str(assignment.getWork()),
         actual_work=duration_to_str(assignment.getActualWork()),
         start=java_date_to_iso(assignment.getStart()),

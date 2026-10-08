@@ -8,6 +8,7 @@ valid JSON, and `check` reports zero errors. Deterministic per seed.
 import json
 import random
 import shutil
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -167,6 +168,12 @@ class TestFuzzXml:
     def test_seed_3(self, tmp_path):
         _scenario(3, "tests/fixtures/sample.xml", tmp_path, ".xml")
 
+    def test_seed_4(self, tmp_path):
+        _scenario(4, "tests/fixtures/sample.xml", tmp_path, ".xml", steps=50)
+
+    def test_seed_5(self, tmp_path):
+        _scenario(5, "tests/fixtures/sample.xml", tmp_path, ".xml", steps=50)
+
 
 class TestFuzzPod:
     def test_seed_1(self, tmp_path):
@@ -177,6 +184,12 @@ class TestFuzzPod:
 
     def test_seed_3(self, tmp_path):
         _scenario(3, "tests/fixtures/real.pod", tmp_path, ".pod")
+
+    def test_seed_4(self, tmp_path):
+        _scenario(4, "tests/fixtures/real.pod", tmp_path, ".pod", steps=50)
+
+    def test_seed_5(self, tmp_path):
+        _scenario(5, "tests/fixtures/real.pod", tmp_path, ".pod", steps=50)
 
 
 class TestCrossFormatFidelity:
@@ -190,3 +203,138 @@ class TestCrossFormatFidelity:
         _run(["convert", pod, back])
         assert _run(["tasks", "list", back])["tasks"] == tasks_xml
         assert _run(["resources", "list", back])["resources"] == res_xml
+
+
+class TestNegativeFuzz:
+    """Invalid inputs must always fail cleanly: exit 1, exactly one JSON
+    error on stderr, and no output file created."""
+
+    BAD_CASES = [
+        ["tasks", "get", "{f}", "999"],
+        ["tasks", "update", "{f}", "1", "--percent-complete", "101", "--output", "{o}"],
+        ["tasks", "update", "{f}", "1", "--percent-complete", "-1", "--output", "{o}"],
+        ["tasks", "update", "{f}", "1", "--duration", "zero", "--output", "{o}"],
+        ["tasks", "update", "{f}", "1", "--start", "not-a-date", "--output", "{o}"],
+        ["tasks", "update", "{f}", "1", "--start", "2026-12-01", "--output", "{o}"],
+        ["tasks", "add", "{f}", "--name", "X", "--duration", "1x", "--output", "{o}"],
+        [
+            "tasks",
+            "add",
+            "{f}",
+            "--name",
+            "X",
+            "--start",
+            "2026-12-01",
+            "--finish",
+            "2026-01-01",
+            "--output",
+            "{o}",
+        ],
+        ["tasks", "add", "{f}", "--name", "X", "--parent-id", "999", "--output", "{o}"],
+        ["tasks", "delete", "{f}", "999", "--output", "{o}"],
+        ["tasks", "assign", "{f}", "1", "999", "--output", "{o}"],
+        ["tasks", "assign", "{f}", "999", "1", "--output", "{o}"],
+        ["tasks", "assign", "{f}", "1", "1", "--units", "0", "--output", "{o}"],
+        ["tasks", "assign", "{f}", "1", "1", "--units", "-2", "--output", "{o}"],
+        ["tasks", "unassign", "{f}", "2", "2", "--output", "{o}"],
+        ["tasks", "link", "{f}", "2", "1", "--type", "XX", "--output", "{o}"],
+        ["tasks", "link", "{f}", "1", "1", "--output", "{o}"],
+        ["tasks", "link", "{f}", "2", "999", "--output", "{o}"],
+        ["tasks", "link", "{f}", "2", "1", "--lag", "soon", "--output", "{o}"],
+        ["tasks", "unlink", "{f}", "2", "1", "--output", "{o}"],
+        ["resources", "get", "{f}", "999"],
+        ["resources", "update", "{f}", "999", "--email", "a@b.c", "--output", "{o}"],
+        ["resources", "delete", "{f}", "999", "--output", "{o}"],
+        [
+            "tasks",
+            "update",
+            "{f}",
+            "1",
+            "--percent-complete",
+            "10",
+            "--output",
+            "{o}",
+            "--in-place",
+        ],
+        ["diff", "{f}", "{m}"],
+        ["check", "{m}"],
+        ["info", "{m}"],
+    ]
+
+    def test_bad_cases_xml(self, tmp_path):
+        self._run_bad("tests/fixtures/sample.xml", tmp_path, ".xml")
+
+    def test_bad_cases_pod(self, tmp_path):
+        self._run_bad("tests/fixtures/real.pod", tmp_path, ".pod")
+
+    def _run_bad(self, fixture, tmp_path, ext):
+        import shutil
+
+        src = str(tmp_path / f"neg{ext}")
+        shutil.copy(fixture, src)
+        missing = str(tmp_path / "missing.xml")
+        for case in self.BAD_CASES:
+            out = str(tmp_path / "should-not-exist.xml")
+            args = [c.format(f=src, o=out, m=missing) for c in case]
+            result = runner.invoke(app, args)
+            assert result.exit_code == 1, args
+            error = json.loads(result.stderr)
+            assert set(error) == {"error", "code"}, (args, result.stderr)
+            assert not Path(out).exists(), args
+
+    def test_run_bad_script(self, tmp_path):
+        import shutil
+
+        src = str(tmp_path / "neg.xml")
+        shutil.copy("tests/fixtures/sample.xml", src)
+        bad_scripts = [
+            {"operations": []},
+            {"operations": [{"op": "nope"}]},
+            {"operations": [{"op": "add"}]},
+            {"operations": [{"op": "update", "unique_id": 999}]},
+            {"operations": [{"op": "link", "task": 1, "pred": 1}]},
+            {"nope": True},
+        ]
+        for i, script in enumerate(bad_scripts):
+            p = tmp_path / f"bad{i}.json"
+            p.write_text(json.dumps(script))
+            out = tmp_path / f"nope{i}.xml"
+            result = runner.invoke(app, ["run", src, str(p), "--output", str(out)])
+            assert result.exit_code == 1, script
+            error = json.loads(result.stderr)
+            assert "code" in error, (script, result.stderr)
+            assert not out.exists(), script
+
+
+class TestHelpSmoke:
+    COMMANDS = [
+        ["info", "--help"],
+        ["convert", "--help"],
+        ["tasks", "--help"],
+        ["tasks", "list", "--help"],
+        ["tasks", "get", "--help"],
+        ["tasks", "add", "--help"],
+        ["tasks", "update", "--help"],
+        ["tasks", "delete", "--help"],
+        ["tasks", "assign", "--help"],
+        ["tasks", "unassign", "--help"],
+        ["tasks", "link", "--help"],
+        ["tasks", "unlink", "--help"],
+        ["tasks", "import", "--help"],
+        ["resources", "--help"],
+        ["resources", "list", "--help"],
+        ["resources", "get", "--help"],
+        ["resources", "add", "--help"],
+        ["resources", "update", "--help"],
+        ["resources", "delete", "--help"],
+        ["assignments", "list", "--help"],
+        ["diff", "--help"],
+        ["check", "--help"],
+        ["run", "--help"],
+    ]
+
+    def test_all_helps(self):
+        for args in self.COMMANDS:
+            result = runner.invoke(app, args)
+            assert result.exit_code == 0, args
+            assert "Usage" in result.stdout, args

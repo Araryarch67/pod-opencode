@@ -98,6 +98,42 @@ def jint(value: int):
     return jpype.java.lang.Integer(value)
 
 
+def units_to_java(fraction):
+    """Convert a user fraction (1.0 = full time) to MPXJ percent-points.
+
+    MPXJ 16 reads and writes units as percent-points (100.0 = 100%),
+    which is also what MSPDI stores (1 = 100%). The CLI speaks fractions,
+    so scale here at the single boundary point.
+    """
+    return float(fraction) * 100.0
+
+
+def units_from_java(value):
+    """Convert MPXJ percent-points back to a user fraction. None stays None."""
+    if value is None:
+        return None
+    return float(value) / 100.0
+
+
+def set_resource_max_units(resource, fraction):
+    """Set overall availability (max units) from a fraction (1.0 = full).
+
+    MPXJ 16 removed setMaxUnits; availability is stored per date range in
+    percent-points. A single wide range means "always at this level".
+    """
+    from org.mpxj import Availability
+
+    table = resource.getAvailability()
+    table.clear()
+    table.add(
+        Availability(
+            to_java_datetime(parse_date("2000-01-01")),
+            to_java_datetime(parse_date("2100-01-01")),
+            units_to_java(fraction),
+        )
+    )
+
+
 def next_ids(items):
     """Return (next_id, next_unique_id) as max+1 over a task/resource list.
 

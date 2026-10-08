@@ -61,7 +61,8 @@ pod-opencode resources update <file> <unique_id> [--name TEXT] [--email TEXT] [-
 pod-opencode resources delete <file> <unique_id> [--project-name TEXT] --output <file.xml|file.pod>
 ```
 
-- `--max-units`: `1.0` = full time.
+- `--max-units`: `1.0` = full time. Units are fractions everywhere
+  (`1.0` means 100%), matching what MSPDI stores.
 
 ## assignments (list is read-only)
 

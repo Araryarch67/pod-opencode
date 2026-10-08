@@ -15,6 +15,7 @@ from pod_opencode.utils import (
     validate_task_inputs,
     check_effective_order,
     suggest_name,
+    set_resource_max_units,
     ValidationError,
 )
 from pod_opencode.commands.tasks import (
@@ -273,7 +274,11 @@ def _apply_op(project, index, item, task_refs, res_refs):
         if item.get("email"):
             resource.setEmailAddress(item["email"])
         if item.get("max_units") is not None:
-            resource.setMaxUnits(float(item["max_units"]))
+            if float(item["max_units"]) <= 0:
+                raise OpError(
+                    "INVALID_VALUE", f"operations[{index}]: max-units must be > 0"
+                )
+            set_resource_max_units(resource, float(item["max_units"]))
         res_refs[item["name"]] = resource
         if item.get("ref"):
             res_refs[item["ref"]] = resource

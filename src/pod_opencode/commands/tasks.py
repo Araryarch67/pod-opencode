@@ -19,6 +19,7 @@ from pod_opencode.utils import (
     to_java_datetime,
     validate_task_inputs,
     check_effective_order,
+    units_to_java,
     ValidationError,
     jstr,
     jint,
@@ -468,9 +469,9 @@ RELATION_TYPES = {
 
 
 def _create_assignment(project, task, resource, units):
-    """Assign resource to task. Returns the new assignment UniqueID."""
+    """Assign resource to task (units as fraction, 1.0 = full). Returns new UID."""
     assignment = task.addResourceAssignment(resource)
-    assignment.setUnits(units)
+    assignment.setUnits(units_to_java(units))
     uids = [
         int(a.getUniqueID())
         for a in project.getResourceAssignments()

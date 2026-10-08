@@ -6,7 +6,14 @@ from typing import Optional
 from pod_opencode.reader import read_project
 from pod_opencode.writer import apply_project_name, write_output, resolve_output_path
 from pod_opencode.models import ResourceInfo, ResourceListResponse, WriteSuccess
-from pod_opencode.utils import jstr, jint, next_ids, ValidationError
+from pod_opencode.utils import (
+    jstr,
+    jint,
+    next_ids,
+    ValidationError,
+    units_from_java,
+    set_resource_max_units,
+)
 
 
 app = typer.Typer()
@@ -20,7 +27,7 @@ def _resource_to_info(resource) -> ResourceInfo:
         name=jstr(resource.getName()),
         resource_type=str(resource.getType()),
         email=jstr(resource.getEmailAddress()),
-        max_units=resource.getMaxUnits(),
+        max_units=units_from_java(resource.getMaxUnits()),
         notes=jstr(resource.getNotes()),
     )
 
@@ -133,7 +140,9 @@ def add(
         if email:
             new_resource.setEmailAddress(email)
         if max_units is not None:
-            new_resource.setMaxUnits(max_units)
+            if max_units <= 0:
+                raise ValidationError("max-units must be greater than 0")
+            set_resource_max_units(new_resource, max_units)
 
         output_path = resolve_output_path(str(file_path), output, in_place)
         apply_project_name(project, project_name)
@@ -203,7 +212,9 @@ def update(
         if email:
             resource.setEmailAddress(email)
         if max_units is not None:
-            resource.setMaxUnits(max_units)
+            if max_units <= 0:
+                raise ValidationError("max-units must be greater than 0")
+            set_resource_max_units(resource, max_units)
 
         output_path = resolve_output_path(str(file_path), output, in_place)
         apply_project_name(project, project_name)
