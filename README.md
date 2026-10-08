@@ -12,6 +12,34 @@ A Python CLI tool for reading and modifying ProjectLibre `.pod` files via MPXJ. 
 - **Cannot write POD format directly** — output is MSPDI XML (which ProjectLibre opens natively)
 - Requires a Java JRE on your system
 - Cross-platform (macOS, Linux, Windows)
+- Ships as an **AI agent skill** (`pod-opencode`) for OpenCode, Claude Code, Codex, Cursor, and other agents
+
+## AI Agent Skill
+
+No extra setup when you open this repo in a supported agent — the skill is pre-installed project-locally:
+
+| Agent | Discovery path in this repo |
+|---|---|
+| OpenCode | `.opencode/skills/pod-opencode/SKILL.md` |
+| Claude Code | `.claude/skills/pod-opencode/SKILL.md` |
+| Codex / Cursor / generic | `.agents/skills/pod-opencode/SKILL.md`, `.codex/skills/pod-opencode/SKILL.md` |
+| Skill-registry tools (`npx skills add`) | `skills/pod-opencode/SKILL.md` (canonical source) |
+
+Use it in another project (global install):
+
+```bash
+./scripts/install-skill.sh
+```
+
+This copies the canonical skill to `~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.agents/skills/`, and `~/.codex/skills/`. Restart the agent and verify `pod-opencode` appears in `/skills` (or invoke explicitly: `@pod-opencode`).
+
+Check prerequisites from the skill:
+
+```bash
+python skills/pod-opencode/scripts/check-env.py
+```
+
+> Contributors: edit only `skills/pod-opencode/*`, then run `./scripts/sync-skills.sh` to refresh the project-local copies.
 
 ## Installation
 
