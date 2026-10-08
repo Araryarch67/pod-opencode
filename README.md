@@ -1,6 +1,7 @@
 # pod-opencode
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/pod-opencode.svg)](https://pypi.org/project/pod-opencode/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A Python CLI for reading and writing ProjectLibre `.pod` files via MPXJ, built so AI assistants can work with project schedules through shell commands. Every read prints one JSON object, every write returns one JSON receipt.
@@ -74,15 +75,15 @@ If `pod-opencode` is missing, the skill tells the agent to clone this repo and i
 ## Installation
 
 ```bash
+pip install pod-opencode
+```
+
+Requires Java JRE 8+ on `PATH`. From source instead:
+
+```bash
 git clone https://github.com/Araryarch67/pod-opencode.git
 cd pod-opencode
 pip install -e ".[dev]"   # dev install, includes pytest
-```
-
-Minimal install without test dependencies:
-
-```bash
-pip install -e .
 ```
 
 Check it works:
