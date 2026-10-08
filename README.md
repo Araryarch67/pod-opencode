@@ -1,6 +1,5 @@
 # pod-opencode
 
-[![CI](https://github.com/Araryarch67/pod-opencode/actions/workflows/ci.yml/badge.svg)](https://github.com/Araryarch67/pod-opencode/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -29,8 +28,11 @@ Based on [pod-ai-cli](https://github.com/distractdiverge/pod-ai-cli) by distract
 ## Features
 
 - Read `.pod` and MSPDI `.xml`: project info, tasks, resources, assignments.
-- Write back to `.xml` or native `.pod`.
+- Write back to `.xml` or native `.pod`, or modify in place with `--in-place` (automatic `.bak` backup).
 - Add, update, and delete tasks and resources by stable UniqueID.
+- Assign resources to tasks, link predecessors (FS, SS, FF, SF with lag), import whole plans from one JSON file.
+- Compare two revisions with `diff`.
+- Lint a file with `check` before opening it in ProjectLibre.
 - Set the project name from the CLI, so ProjectLibre opens the file with the right title.
 - JSON on stdout for reads, JSON receipts for writes, JSON errors on stderr with stable codes.
 
@@ -125,6 +127,17 @@ pod-opencode tasks get <file> <unique_id>
 pod-opencode tasks add <file> --name TEXT [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--parent-id UID] [--project-name TEXT] --output <file.xml|file.pod>
 pod-opencode tasks update <file> <unique_id> [--name TEXT] [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--percent-complete FLOAT] [--project-name TEXT] --output <file.xml|file.pod>
 pod-opencode tasks delete <file> <unique_id> [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks assign <file> <task_uid> <resource_uid> [--units FLOAT] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks unassign <file> <task_uid> <resource_uid> [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks link <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--lag TEXT] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks unlink <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks import <file> <batch.json> [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode diff <old_file> <new_file>
+pod-opencode check <file>
+pod-opencode tasks assign <file> <task_uid> <resource_uid> [--units FLOAT] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks unassign <file> <task_uid> <resource_uid> [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks link <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--lag TEXT] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks unlink <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--project-name TEXT] --output <file.xml|file.pod>
 
 pod-opencode resources list <file>
 pod-opencode resources get <file> <unique_id>
@@ -138,8 +151,51 @@ pod-opencode assignments list <file> [--task-id INT] [--resource-id INT]
 Notes:
 
 - `convert` is a group callback, so its options must come before the file arguments, as in the example above. The other commands accept options in any order.
-- `assignments` is read-only. There is no command yet to assign a resource to a task or to edit dependencies.
+- Every write command accepts `--in-place` instead of `--output`: the input is copied to `<input>.bak`, then overwritten. The two flags cannot be combined.
+- `assignments list` is read-only for viewing. Mutations live under `tasks`: `assign`, `unassign`, `link`, `unlink`, `import` (batch format below).
 - A successful write prints `{"status": "ok", "output": "<path>", "affected_unique_id": N}`. Failures print `{"error": "...", "code": "..."}` on stderr, exactly one object per failure.
+
+### Batch import
+
+Create many tasks in one call. Parents reference existing tasks (UniqueID) or tasks created earlier in the same file (name). Resources reference existing resources by name:
+
+```bash
+pod-opencode tasks import project.pod batch.json --output project.pod
+```
+
+```json
+{
+  "project_name": "Optional default name",
+  "tasks": [
+    {"name": "Planning", "start": "2026-10-12", "duration": "5d"},
+    {"name": "Charter", "duration": "2d", "parent": "Planning",
+     "resources": ["Alice", {"name": "Bob", "units": 0.5}]},
+    {"name": "M1 - Approved", "milestone": true, "parent": "Planning"}
+  ]
+}
+```
+
+The first invalid item aborts the import and nothing is written.
+
+### Comparing revisions
+
+```bash
+pod-opencode diff old.pod new.pod
+```
+
+Reports renames, added and removed items, per-field changes keyed by UniqueID, and a summary count block.
+
+### Checking a file
+
+```bash
+pod-opencode check project.pod
+```
+
+Lints the file for logical problems: finish before start, dangling or
+self links, broken hierarchy, out-of-range percents, missing dates,
+unassigned tasks, duplicate names. Prints errors, warnings, and a summary,
+and exits 1 when any error is found. Read-only. Run it after agent edits
+and before opening the file in ProjectLibre.
 
 ## Project name and window title
 

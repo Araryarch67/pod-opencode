@@ -65,3 +65,26 @@ def write_output(project, output_path: str):
         write_pod(project, output_path)
     else:
         write_project(project, output_path)
+
+
+def resolve_output_path(input_path: str, output, in_place: bool) -> str:
+    """Resolve the write target for mutating commands.
+
+    With in_place, the input is first copied to `<input>.bak` and the
+    input itself becomes the target. Otherwise output is required.
+    """
+    import shutil
+
+    if in_place:
+        if output:
+            from pod_opencode.utils import ValidationError
+
+            raise ValidationError("--output cannot be combined with --in-place")
+        backup = input_path + ".bak"
+        shutil.copy2(input_path, backup)
+        return input_path
+    if not output:
+        from pod_opencode.utils import ValidationError
+
+        raise ValidationError("--output is required unless --in-place is given")
+    return output

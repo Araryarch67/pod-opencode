@@ -4,9 +4,9 @@ import json
 from typing import Optional
 
 from pod_opencode.reader import read_project
-from pod_opencode.writer import apply_project_name, write_output
+from pod_opencode.writer import apply_project_name, write_output, resolve_output_path
 from pod_opencode.models import ResourceInfo, ResourceListResponse, WriteSuccess
-from pod_opencode.utils import jstr, jint, next_ids
+from pod_opencode.utils import jstr, jint, next_ids, ValidationError
 
 
 app = typer.Typer()
@@ -25,8 +25,8 @@ def _resource_to_info(resource) -> ResourceInfo:
     )
 
 
-@app.command()
-def list(
+@app.command("list")
+def list_resources(
     file: str = typer.Argument(..., help="Path to .pod or .xml file"),
 ):
     """List all resources in the project."""
@@ -110,7 +110,10 @@ def add(
     project_name: Optional[str] = typer.Option(
         None, help="Set project name (window title in ProjectLibre)"
     ),
-    output: str = typer.Option(..., help="Output .xml file"),
+    output: Optional[str] = typer.Option(None, help="Output file (.xml or .pod)"),
+    in_place: bool = typer.Option(
+        False, "--in-place", help="Modify input in place (backs up to .bak)"
+    ),
 ):
     """Add a new resource to the project."""
     file_path = Path(file)
@@ -132,16 +135,21 @@ def add(
         if max_units is not None:
             new_resource.setMaxUnits(max_units)
 
+        output_path = resolve_output_path(str(file_path), output, in_place)
         apply_project_name(project, project_name)
-        write_output(project, output)
+        write_output(project, output_path)
 
         response = WriteSuccess(
-            output=output, affected_unique_id=new_resource.getUniqueID()
+            output=output_path, affected_unique_id=new_resource.getUniqueID()
         )
         result = response.model_dump_json(indent=2)
         typer.echo(result)
     except FileNotFoundError as e:
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
+        typer.echo(json.dumps(error), err=True)
+        raise typer.Exit(1)
+    except ValidationError as e:
+        error = {"error": str(e), "code": "INVALID_VALUE"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
     except ValueError as e:
@@ -166,7 +174,10 @@ def update(
     project_name: Optional[str] = typer.Option(
         None, help="Set project name (window title in ProjectLibre)"
     ),
-    output: str = typer.Option(..., help="Output .xml file"),
+    output: Optional[str] = typer.Option(None, help="Output file (.xml or .pod)"),
+    in_place: bool = typer.Option(
+        False, "--in-place", help="Modify input in place (backs up to .bak)"
+    ),
 ):
     """Update an existing resource."""
     file_path = Path(file)
@@ -194,14 +205,19 @@ def update(
         if max_units is not None:
             resource.setMaxUnits(max_units)
 
+        output_path = resolve_output_path(str(file_path), output, in_place)
         apply_project_name(project, project_name)
-        write_output(project, output)
+        write_output(project, output_path)
 
-        response = WriteSuccess(output=output, affected_unique_id=unique_id)
+        response = WriteSuccess(output=output_path, affected_unique_id=unique_id)
         result = response.model_dump_json(indent=2)
         typer.echo(result)
     except FileNotFoundError as e:
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
+        typer.echo(json.dumps(error), err=True)
+        raise typer.Exit(1)
+    except ValidationError as e:
+        error = {"error": str(e), "code": "INVALID_VALUE"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
     except ValueError as e:
@@ -223,7 +239,10 @@ def delete(
     project_name: Optional[str] = typer.Option(
         None, help="Set project name (window title in ProjectLibre)"
     ),
-    output: str = typer.Option(..., help="Output .xml file"),
+    output: Optional[str] = typer.Option(None, help="Output file (.xml or .pod)"),
+    in_place: bool = typer.Option(
+        False, "--in-place", help="Modify input in place (backs up to .bak)"
+    ),
 ):
     """Delete a resource from the project."""
     file_path = Path(file)
@@ -245,14 +264,19 @@ def delete(
             raise typer.Exit(1)
 
         project.removeResource(resource)
+        output_path = resolve_output_path(str(file_path), output, in_place)
         apply_project_name(project, project_name)
-        write_output(project, output)
+        write_output(project, output_path)
 
-        response = WriteSuccess(output=output, affected_unique_id=unique_id)
+        response = WriteSuccess(output=output_path, affected_unique_id=unique_id)
         result = response.model_dump_json(indent=2)
         typer.echo(result)
     except FileNotFoundError as e:
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
+        typer.echo(json.dumps(error), err=True)
+        raise typer.Exit(1)
+    except ValidationError as e:
+        error = {"error": str(e), "code": "INVALID_VALUE"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
     except ValueError as e:

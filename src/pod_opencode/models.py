@@ -85,6 +85,13 @@ class WriteSuccess(BaseModel):
     affected_unique_id: Optional[int] = None
 
 
+class ImportSuccess(BaseModel):
+    status: str = "ok"
+    output: str
+    created_unique_ids: List[int]
+    count: int
+
+
 class ErrorResponse(BaseModel):
     error: str
     code: str

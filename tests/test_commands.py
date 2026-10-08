@@ -209,3 +209,932 @@ class TestRealPodFile:
         info = runner.invoke(app, ["info", str(output_file)])
         assert info.exit_code == 0
         assert json.loads(info.stdout)["name"] == "Sistem Perpustakaan"
+
+
+class TestTaskValidation:
+    def test_rejects_percent_over_100(self, sample_pod_path, tmp_path):
+        result = runner.invoke(
+            app,
+            [
+                "tasks",
+                "update",
+                sample_pod_path,
+                "1",
+                "--percent-complete",
+                "150",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert result.exit_code == 1
+        error = json.loads(result.stderr)
+        assert error["code"] == "INVALID_VALUE"
+        assert not (tmp_path / "o.xml").exists()
+
+    def test_rejects_bad_duration(self, sample_pod_path, tmp_path):
+        result = runner.invoke(
+            app,
+            [
+                "tasks",
+                "add",
+                sample_pod_path,
+                "--name",
+                "X",
+                "--duration",
+                "lima hari",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert result.exit_code == 1
+        assert json.loads(result.stderr)["code"] == "INVALID_VALUE"
+
+    def test_rejects_finish_before_start(self, sample_pod_path, tmp_path):
+        result = runner.invoke(
+            app,
+            [
+                "tasks",
+                "add",
+                sample_pod_path,
+                "--name",
+                "X",
+                "--start",
+                "2026-12-01",
+                "--finish",
+                "2026-01-01",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert result.exit_code == 1
+        assert json.loads(result.stderr)["code"] == "INVALID_VALUE"
+
+    def test_rejects_bad_date(self, sample_pod_path, tmp_path):
+        result = runner.invoke(
+            app,
+            [
+                "tasks",
+                "add",
+                sample_pod_path,
+                "--name",
+                "X",
+                "--start",
+                "bukan-tanggal",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert result.exit_code == 1
+        assert json.loads(result.stderr)["code"] == "INVALID_VALUE"
+
+
+class TestAssignUnassign:
+    def test_assign_and_list(self, sample_pod_path, tmp_path):
+        out = tmp_path / "a.xml"
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "assign",
+                sample_pod_path,
+                "2",
+                "2",
+                "--units",
+                "0.5",
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 0
+        data = json.loads(
+            runner.invoke(
+                app, ["assignments", "list", str(out), "--task-id", "2"]
+            ).stdout
+        )
+        assert data["count"] == 2
+        assert 0.5 in [a["units"] for a in data["assignments"]]
+
+    def test_assign_duplicate_rejected(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "assign",
+                sample_pod_path,
+                "1",
+                "1",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+    def test_assign_bad_units_rejected(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "assign",
+                sample_pod_path,
+                "2",
+                "2",
+                "--units",
+                "0",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+    def test_unassign_removes(self, sample_pod_path, tmp_path):
+        out = tmp_path / "u.xml"
+        r = runner.invoke(
+            app, ["tasks", "unassign", sample_pod_path, "1", "1", "--output", str(out)]
+        )
+        assert r.exit_code == 0
+        data = json.loads(
+            runner.invoke(
+                app, ["assignments", "list", str(out), "--task-id", "1"]
+            ).stdout
+        )
+        assert data["count"] == 0
+
+    def test_unassign_missing(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "unassign",
+                sample_pod_path,
+                "2",
+                "2",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "ASSIGNMENT_NOT_FOUND"
+
+
+class TestLinkUnlink:
+    def test_link_with_lag_roundtrip(self, sample_pod_path, tmp_path):
+        out = tmp_path / "l.xml"
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "link",
+                sample_pod_path,
+                "2",
+                "1",
+                "--type",
+                "FS",
+                "--lag",
+                "2d",
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 0
+        preds = json.loads(runner.invoke(app, ["tasks", "get", str(out), "2"]).stdout)[
+            "predecessors"
+        ]
+        assert len(preds) == 1
+        assert preds[0]["task_unique_id"] == 1
+        assert preds[0]["relation_type"] == "FS"
+
+    def test_link_duplicate_rejected(self, sample_pod_path, tmp_path):
+        out = tmp_path / "l.xml"
+        runner.invoke(
+            app, ["tasks", "link", sample_pod_path, "2", "1", "--output", str(out)]
+        )
+        r = runner.invoke(
+            app,
+            ["tasks", "link", str(out), "2", "1", "--output", str(tmp_path / "o.xml")],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+    def test_link_bad_type_rejected(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "link",
+                sample_pod_path,
+                "2",
+                "1",
+                "--type",
+                "XX",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+    def test_unlink_removes(self, sample_pod_path, tmp_path):
+        out = tmp_path / "l.xml"
+        runner.invoke(
+            app, ["tasks", "link", sample_pod_path, "2", "1", "--output", str(out)]
+        )
+        r = runner.invoke(
+            app, ["tasks", "unlink", str(out), "2", "1", "--output", str(out)]
+        )
+        assert r.exit_code == 0
+        preds = json.loads(runner.invoke(app, ["tasks", "get", str(out), "2"]).stdout)[
+            "predecessors"
+        ]
+        assert preds == []
+
+    def test_unlink_missing(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "unlink",
+                sample_pod_path,
+                "2",
+                "1",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "LINK_NOT_FOUND"
+
+
+class TestMilestone:
+    def test_add_milestone(self, sample_pod_path, tmp_path):
+        out = tmp_path / "m.xml"
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "add",
+                sample_pod_path,
+                "--name",
+                "M1",
+                "--milestone",
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 0
+        tasks = json.loads(runner.invoke(app, ["tasks", "list", str(out)]).stdout)[
+            "tasks"
+        ]
+        assert next(t for t in tasks if t["name"] == "M1")["milestone"] is True
+
+    def test_update_milestone_toggle(self, sample_pod_path, tmp_path):
+        out = tmp_path / "m.xml"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "update",
+                    sample_pod_path,
+                    "1",
+                    "--milestone",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        assert (
+            json.loads(runner.invoke(app, ["tasks", "get", str(out), "1"]).stdout)[
+                "milestone"
+            ]
+            is True
+        )
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "update",
+                    str(out),
+                    "1",
+                    "--no-milestone",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        assert (
+            json.loads(runner.invoke(app, ["tasks", "get", str(out), "1"]).stdout)[
+                "milestone"
+            ]
+            is False
+        )
+
+
+class TestDiff:
+    def test_diff_detects_changes(self, sample_pod_path, tmp_path):
+        new = tmp_path / "new.xml"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "add",
+                    sample_pod_path,
+                    "--name",
+                    "Baru",
+                    "--output",
+                    str(new),
+                ],
+            ).exit_code
+            == 0
+        )
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "update",
+                    str(new),
+                    "1",
+                    "--percent-complete",
+                    "75",
+                    "--project-name",
+                    "Ganti",
+                    "--output",
+                    str(new),
+                ],
+            ).exit_code
+            == 0
+        )
+        r = runner.invoke(app, ["diff", sample_pod_path, str(new)])
+        assert r.exit_code == 0
+        d = json.loads(r.stdout)
+        assert d["summary"]["tasks_added"] == 1
+        assert d["summary"]["tasks_changed"] == 1
+        assert d["project_name"] == {"from": "Sample Project", "to": "Ganti"}
+        changed = next(c for c in d["tasks_changed"] if c["unique_id"] == 1)
+        assert changed["changes"]["percent_complete"] == {"from": 0.0, "to": 75.0}
+
+    def test_diff_identical_files(self, sample_pod_path):
+        d = json.loads(
+            runner.invoke(app, ["diff", sample_pod_path, sample_pod_path]).stdout
+        )
+        assert d["summary"] == {
+            "tasks_added": 0,
+            "tasks_removed": 0,
+            "tasks_changed": 0,
+            "resources_added": 0,
+            "resources_removed": 0,
+            "resources_changed": 0,
+        }
+        assert d["project_name"] is None
+
+    def test_diff_missing_file(self, sample_pod_path, tmp_path):
+        r = runner.invoke(app, ["diff", sample_pod_path, str(tmp_path / "no.xml")])
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "FILE_NOT_FOUND"
+
+
+class TestInPlace:
+    def test_in_place_updates_and_backs_up(self, sample_pod_path, tmp_path):
+        target = tmp_path / "work.xml"
+        target.write_bytes(Path(sample_pod_path).read_bytes())
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "update",
+                str(target),
+                "1",
+                "--percent-complete",
+                "90",
+                "--in-place",
+            ],
+        )
+        assert r.exit_code == 0
+        assert json.loads(r.stdout)["output"] == str(target)
+        bak = tmp_path / "work.xml.bak"
+        assert bak.exists()
+        assert (
+            json.loads(runner.invoke(app, ["tasks", "get", str(bak), "1"]).stdout)[
+                "percent_complete"
+            ]
+            == 0.0
+        )
+        assert (
+            json.loads(runner.invoke(app, ["tasks", "get", str(target), "1"]).stdout)[
+                "percent_complete"
+            ]
+            == 90.0
+        )
+
+    def test_in_place_conflicts_with_output(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "update",
+                sample_pod_path,
+                "1",
+                "--percent-complete",
+                "10",
+                "--output",
+                str(tmp_path / "o.xml"),
+                "--in-place",
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+
+class TestImport:
+    BATCH = {
+        "project_name": "BatchProj",
+        "tasks": [
+            {"name": "A", "start": "2026-10-12", "duration": "5d"},
+            {"name": "B", "duration": "2d", "parent": "A", "resources": ["Alice"]},
+            {"name": "M", "milestone": True, "parent": "A"},
+        ],
+    }
+
+    def _batch_file(self, tmp_path, data):
+        p = tmp_path / "batch.json"
+        p.write_text(json.dumps(data))
+        return str(p)
+
+    def test_import_creates_hierarchy(self, sample_pod_path, tmp_path):
+        out = tmp_path / "imp.xml"
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "import",
+                sample_pod_path,
+                self._batch_file(tmp_path, self.BATCH),
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 0
+        data = json.loads(r.stdout)
+        assert data["count"] == 3
+        assert len(data["created_unique_ids"]) == 3
+        tasks = {
+            t["name"]: t
+            for t in json.loads(runner.invoke(app, ["tasks", "list", str(out)]).stdout)[
+                "tasks"
+            ]
+        }
+        assert tasks["B"]["parent_id"] == tasks["A"]["unique_id"]
+        assert tasks["B"]["outline_level"] == 2
+        assert tasks["M"]["milestone"] is True
+        assert tasks["B"]["resource_names"] == ["Alice"]
+        assert (
+            json.loads(runner.invoke(app, ["info", str(out)]).stdout)["name"]
+            == "BatchProj"
+        )
+
+    def test_import_unknown_parent_no_output(self, sample_pod_path, tmp_path):
+        out = tmp_path / "imp.xml"
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "import",
+                sample_pod_path,
+                self._batch_file(
+                    tmp_path, {"tasks": [{"name": "X", "parent": "Nope"}]}
+                ),
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+        assert not out.exists()
+
+    def test_import_unknown_resource(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "import",
+                sample_pod_path,
+                self._batch_file(
+                    tmp_path, {"tasks": [{"name": "X", "resources": ["Ghost"]}]}
+                ),
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+    def test_import_invalid_json(self, sample_pod_path, tmp_path):
+        p = tmp_path / "bad.json"
+        p.write_text("{not json")
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "import",
+                sample_pod_path,
+                str(p),
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+
+class TestRoundTrip:
+    def test_update_dates_duration_percent(self, sample_pod_path, tmp_path):
+        out = tmp_path / "u.xml"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "update",
+                    sample_pod_path,
+                    "1",
+                    "--start",
+                    "2026-11-01",
+                    "--finish",
+                    "2026-11-15",
+                    "--duration",
+                    "10d",
+                    "--percent-complete",
+                    "50",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        task = json.loads(runner.invoke(app, ["tasks", "get", str(out), "1"]).stdout)
+        assert task["start"] == "2026-11-01"
+        assert task["finish"] == "2026-11-15"
+        assert task["duration"] == "10.0d"
+        assert task["percent_complete"] == 50.0
+
+    def test_resources_add_update_delete(self, sample_pod_path, tmp_path):
+        out = tmp_path / "r.xml"
+        r = runner.invoke(
+            app,
+            [
+                "resources",
+                "add",
+                sample_pod_path,
+                "--name",
+                "Zed",
+                "--email",
+                "z@x.com",
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 0
+        uid = json.loads(r.stdout)["affected_unique_id"]
+        assert uid is not None
+        res = json.loads(
+            runner.invoke(app, ["resources", "get", str(out), str(uid)]).stdout
+        )
+        assert res["name"] == "Zed"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "resources",
+                    "update",
+                    str(out),
+                    str(uid),
+                    "--email",
+                    "n@x.com",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        assert (
+            json.loads(
+                runner.invoke(app, ["resources", "get", str(out), str(uid)]).stdout
+            )["email"]
+            == "n@x.com"
+        )
+        assert (
+            runner.invoke(
+                app, ["resources", "delete", str(out), str(uid), "--output", str(out)]
+            ).exit_code
+            == 0
+        )
+        gone = runner.invoke(app, ["resources", "get", str(out), str(uid)])
+        assert gone.exit_code == 1
+        assert json.loads(gone.stderr)["code"] == "RESOURCE_NOT_FOUND"
+
+    def test_tasks_delete_removes(self, sample_pod_path, tmp_path):
+        out = tmp_path / "d.xml"
+        assert (
+            runner.invoke(
+                app, ["tasks", "delete", sample_pod_path, "3", "--output", str(out)]
+            ).exit_code
+            == 0
+        )
+        gone = runner.invoke(app, ["tasks", "get", str(out), "3"])
+        assert gone.exit_code == 1
+        assert json.loads(gone.stderr)["code"] == "TASK_NOT_FOUND"
+
+
+class TestCliConsistency:
+    WRITE_COMMANDS = [
+        ["tasks", "add"],
+        ["tasks", "update"],
+        ["tasks", "delete"],
+        ["tasks", "assign"],
+        ["tasks", "unassign"],
+        ["tasks", "link"],
+        ["tasks", "unlink"],
+        ["tasks", "import"],
+        ["resources", "add"],
+        ["resources", "update"],
+        ["resources", "delete"],
+        ["convert"],
+    ]
+
+    def test_write_commands_share_flags(self):
+        for cmd in self.WRITE_COMMANDS:
+            text = runner.invoke(app, [*cmd, "--help"]).stdout
+            assert "--project-name" in text, cmd
+            assert "--in-place" in text, cmd
+            if cmd != ["convert"]:
+                assert "--output" in text, cmd
+
+    def test_error_output_is_single_json(self):
+        cases = [
+            ["info", "/nonexistent/x.pod"],
+            ["tasks", "get", "tests/fixtures/sample.xml", "999"],
+            [
+                "tasks",
+                "update",
+                "tests/fixtures/sample.xml",
+                "1",
+                "--percent-complete",
+                "500",
+                "--output",
+                "/tmp/opencode/nonexistent-dir/o.xml",
+            ],
+            [
+                "tasks",
+                "link",
+                "tests/fixtures/sample.xml",
+                "2",
+                "1",
+                "--type",
+                "XX",
+                "--output",
+                "/tmp/opencode/o.xml",
+            ],
+            [
+                "tasks",
+                "unlink",
+                "tests/fixtures/sample.xml",
+                "2",
+                "1",
+                "--output",
+                "/tmp/opencode/o.xml",
+            ],
+            ["diff", "tests/fixtures/sample.xml", "/nonexistent/y.xml"],
+        ]
+        for args in cases:
+            r = runner.invoke(app, args)
+            assert r.exit_code == 1, args
+            error = json.loads(r.stderr)
+            assert set(error) == {"error", "code"}, args
+
+
+class TestCheck:
+    def _mutated(self, tmp_path, mutate, name="broken.xml"):
+        import re
+
+        xml = Path("tests/fixtures/sample.xml").read_text()
+        out = tmp_path / name
+        out.write_text(mutate(xml))
+        return str(out)
+
+    def test_clean_file(self, sample_pod_path):
+        r = runner.invoke(app, ["check", sample_pod_path])
+        assert r.exit_code == 0
+        d = json.loads(r.stdout)
+        assert d["summary"]["errors"] == 0
+        assert d["summary"]["tasks_checked"] == 3
+
+    def test_finish_before_start(self, tmp_path):
+        path = self._mutated(
+            tmp_path,
+            lambda xml: xml.replace(
+                "<Start>2025-01-01T09:00:00</Start>",
+                "<Start>2025-02-01T09:00:00</Start>",
+                1,
+            ),
+        )
+        r = runner.invoke(app, ["check", path])
+        assert r.exit_code == 1
+        codes = [e["code"] for e in json.loads(r.stdout)["errors"]]
+        assert "FINISH_BEFORE_START" in codes
+
+    def test_dangling_link(self, tmp_path):
+        link = "<PredecessorLink><PredecessorUID>999</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink>"
+        path = self._mutated(
+            tmp_path,
+            lambda xml: xml.replace("</DurationFormat>", "</DurationFormat>" + link, 1),
+        )
+        r = runner.invoke(app, ["check", path])
+        assert r.exit_code == 1
+        found = [
+            e for e in json.loads(r.stdout)["errors"] if e["code"] == "DANGLING_LINK"
+        ]
+        assert len(found) == 1 and found[0]["unique_id"] == 1
+
+    def test_self_link(self, tmp_path):
+        link = "<PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag></PredecessorLink>"
+        path = self._mutated(
+            tmp_path,
+            lambda xml: xml.replace("</DurationFormat>", "</DurationFormat>" + link, 1),
+        )
+        r = runner.invoke(app, ["check", path])
+        assert r.exit_code == 1
+        assert "SELF_LINK" in [e["code"] for e in json.loads(r.stdout)["errors"]]
+
+    def test_percent_out_of_range(self, tmp_path):
+        import re
+
+        path = self._mutated(
+            tmp_path,
+            lambda xml: re.sub(
+                r"<PercentComplete>.*?</PercentComplete>",
+                "<PercentComplete>150</PercentComplete>",
+                xml,
+                count=1,
+            ),
+        )
+        r = runner.invoke(app, ["check", path])
+        assert r.exit_code == 1
+        assert "PERCENT_OUT_OF_RANGE" in [
+            e["code"] for e in json.loads(r.stdout)["errors"]
+        ]
+
+    def test_broken_hierarchy(self, tmp_path):
+        import re
+
+        def mutate(xml):
+            blocks = re.findall(r"<Task>.*?</Task>", xml, re.S)
+            for i, block in enumerate(blocks):
+                if f"<UID>{i + 1}</UID>" in block[:200] and i == 1:
+                    patched = block.replace(
+                        "<OutlineLevel>1</OutlineLevel>",
+                        "<OutlineLevel>5</OutlineLevel>",
+                        1,
+                    )
+                    return xml.replace(block, patched, 1)
+            return xml
+
+        r = runner.invoke(app, ["check", self._mutated(tmp_path, mutate)])
+        assert r.exit_code == 1
+        assert "BROKEN_HIERARCHY" in [e["code"] for e in json.loads(r.stdout)["errors"]]
+
+    def test_duplicate_name_warning(self, sample_pod_path, tmp_path):
+        out = tmp_path / "dup.xml"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "update",
+                    sample_pod_path,
+                    "2",
+                    "--name",
+                    "Planning",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        r = runner.invoke(app, ["check", str(out)])
+        assert r.exit_code == 0
+        assert "DUPLICATE_TASK_NAME" in [
+            w["code"] for w in json.loads(r.stdout)["warnings"]
+        ]
+
+    def test_unassigned_warning(self, sample_pod_path, tmp_path):
+        out = tmp_path / "u.xml"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "add",
+                    sample_pod_path,
+                    "--name",
+                    "Solo",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        r = runner.invoke(app, ["check", str(out)])
+        assert r.exit_code == 0
+        assert "UNASSIGNED_TASK" in [
+            w["code"] for w in json.loads(r.stdout)["warnings"]
+        ]
+
+    def test_cli_rejects_self_link(self, sample_pod_path, tmp_path):
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "link",
+                sample_pod_path,
+                "1",
+                "1",
+                "--output",
+                str(tmp_path / "o.xml"),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+
+    def test_missing_file(self, tmp_path):
+        r = runner.invoke(app, ["check", str(tmp_path / "no.xml")])
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "FILE_NOT_FOUND"
+
+    def test_percent_update_leaves_no_errors(self, sample_pod_path, tmp_path):
+        out = tmp_path / "p.xml"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "tasks",
+                    "update",
+                    sample_pod_path,
+                    "1",
+                    "--percent-complete",
+                    "50",
+                    "--output",
+                    str(out),
+                ],
+            ).exit_code
+            == 0
+        )
+        r = runner.invoke(app, ["check", str(out)])
+        assert r.exit_code == 0
+        assert json.loads(r.stdout)["summary"]["errors"] == 0
+
+    def test_update_start_beyond_finish_rejected(self, sample_pod_path, tmp_path):
+        out = tmp_path / "o.xml"
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "update",
+                sample_pod_path,
+                "1",
+                "--start",
+                "2026-12-01",
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 1
+        assert json.loads(r.stderr)["code"] == "INVALID_VALUE"
+        assert not out.exists()
+
+    def test_update_start_with_finish_accepted(self, sample_pod_path, tmp_path):
+        out = tmp_path / "o.xml"
+        r = runner.invoke(
+            app,
+            [
+                "tasks",
+                "update",
+                sample_pod_path,
+                "1",
+                "--start",
+                "2026-12-01",
+                "--finish",
+                "2026-12-05",
+                "--output",
+                str(out),
+            ],
+        )
+        assert r.exit_code == 0
+        task = json.loads(runner.invoke(app, ["tasks", "get", str(out), "1"]).stdout)
+        assert task["start"] == "2026-12-01"
+        assert task["finish"] == "2026-12-05"

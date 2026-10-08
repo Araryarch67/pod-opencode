@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `tasks assign` and `tasks unassign` to manage resource assignments,
+  including `--units` and duplicate/unknown-ID errors.
+- `tasks link` and `tasks unlink` to manage predecessor relations
+  (FS, SS, FF, SF, optional lag).
+- `tasks import` to create many tasks at once from a batch JSON file,
+  with parent references, resource assignments, milestones, and
+  project naming.
+- `diff` command to compare two project files (renames, added/removed
+  items, per-field changes, summary counts).
+- `check` command to lint a file (dangling/self links, finish before
+  start, broken hierarchy, out-of-range percents, missing dates,
+  unassigned tasks, duplicate names), including raw-XML detection of
+  links MPXJ drops silently.
+- `--in-place` on every write command: backs up the input to `.bak` and
+  overwrites it.
+- `--milestone` / `--no-milestone` on `tasks add` and `tasks update`.
+- Input validation with `INVALID_VALUE` errors: percent range, duration and
+  date parsing, finish-before-start.
+- Explicit `jpype1` dependency (the `mpxj` package does not declare it, so
+  fresh installs failed to start the JVM).
+
+### Fixed
+
+- Deleting a task now sweeps predecessor links pointing at it and its
+  subtree, which previously lingered as dangling links.
+- Updating start without finish can no longer leave a stale finish behind:
+  the merged dates are validated and rejected with `INVALID_VALUE`.
+- `link` rejects self-links.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added
@@ -24,7 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - AI agent skill (`pod-opencode`) with project-local installs for OpenCode,
   Claude Code, Codex, Cursor and generic agents, plus
   `scripts/install-skill.sh` for global installs.
-- `LICENSE` (MIT), `CHANGELOG.md`, and CI workflow.
+- `LICENSE` (MIT) and `CHANGELOG.md`.
 
 ### Fixed
 

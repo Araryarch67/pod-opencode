@@ -6,15 +6,30 @@ build-backend = "hatchling.build"
 name = "pod-opencode"
 version = "0.2.0"
 description = "CLI for reading and modifying ProjectLibre POD files via MPXJ"
+readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "Araryarch67", email = "araryaarch@gmail.com"}]
 license = {text = "MIT"}
+keywords = ["projectlibre", "pod", "mspdi", "mpxj", "project-management", "ai-agents"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+]
 dependencies = [
-    "typer[all]>=0.12",
-    "mpxj>=1.3",
+    "typer>=0.12",
+    "mpxj>=16",
+    "jpype1>=1.5",
     "pydantic>=2.0",
     "python-dateutil>=2.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Araryarch67/pod-opencode"
+Repository = "https://github.com/Araryarch67/pod-opencode.git"
+Issues = "https://github.com/Araryarch67/pod-opencode/issues"
 
 [project.optional-dependencies]
 dev = [

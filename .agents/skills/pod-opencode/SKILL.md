@@ -52,9 +52,13 @@ pod-opencode convert [--project-name TEXT] <input.pod|xml> <output.xml|output.po
 
 pod-opencode tasks list <file> [--filter-name TEXT]
 pod-opencode tasks get <file> <unique_id>
-pod-opencode tasks add <file> --name TEXT [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--parent-id UID] [--project-name TEXT] --output <out.xml|out.pod>
-pod-opencode tasks update <file> <unique_id> [--name TEXT] [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--percent-complete FLOAT] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks add <file> --name TEXT [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--parent-id UID] [--milestone] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks update <file> <unique_id> [--name TEXT] [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--percent-complete FLOAT] [--milestone|--no-milestone] [--project-name TEXT] --output <out.xml|out.pod>
 pod-opencode tasks delete <file> <unique_id> [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks assign <file> <task_uid> <resource_uid> [--units FLOAT] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks unassign <file> <task_uid> <resource_uid> [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks link <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--lag TEXT] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks unlink <file> <task_uid> <pred_uid> [--type FS|SS|FF|SF] [--project-name TEXT] --output <out.xml|out.pod>
 
 pod-opencode resources list <file>
 pod-opencode resources get <file> <unique_id>
@@ -63,16 +67,23 @@ pod-opencode resources update <file> <unique_id> [--name TEXT] [--email TEXT] [-
 pod-opencode resources delete <file> <unique_id> [--project-name TEXT] --output <out.xml|out.pod>
 
 pod-opencode assignments list <file> [--task-id INT] [--resource-id INT]
+
+pod-opencode tasks import <file> <batch.json> [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode diff <old> <new>
+pod-opencode check <file>
 ```
+
+Every write command also accepts `--in-place` instead of `--output`: the input is copied to `<input>.bak`, then overwritten. `--output` and `--in-place` cannot be combined.
 
 `--project-name` sets the project name shown as the window title in ProjectLibre. Set it once on `convert` (or any write); it persists in the file for chained edits.
 
 Full flags and JSON schemas: see `references/commands.md` and `references/json-schemas.md`.
+Batch file format: `references/batch.md`.
 
 ## Typical workflow
 
-1. `pod-opencode info project.pod` — confirm file loads, note task/resource counts.
-2. `pod-opencode tasks list project.pod` — find `unique_id` values.
+1. `pod-opencode info project.pod` (confirm file loads, note task/resource counts).
+2. `pod-opencode tasks list project.pod` (find `unique_id` values).
 3. Mutate with `--output /tmp/out.xml`, e.g.:
    ```bash
    pod-opencode tasks add project.pod --name "New Task" --start 2025-07-01 --duration "5d" --output /tmp/out.xml

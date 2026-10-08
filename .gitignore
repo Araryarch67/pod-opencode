@@ -38,3 +38,4 @@ env/
 # exception is the small binary fixture the test-suite reads.
 *.pod
 !tests/fixtures/real.pod
+*.bak

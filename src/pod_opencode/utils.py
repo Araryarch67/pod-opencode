@@ -145,3 +145,52 @@ def parse_duration(text):
     if unit is None:
         return None
     return Duration.getInstance(value, unit)
+
+
+class ValidationError(ValueError):
+    """Raised when user-supplied option values are invalid."""
+
+
+def check_effective_order(cur_start, cur_finish, start_dt, finish_dt):
+    """Ensure the merged new/existing dates stay consistent.
+
+    cur_start/cur_finish are the task's current Java temporals (or None);
+    start_dt/finish_dt are new Python datetimes (or None). Raises
+    ValidationError when the effective finish precedes the effective start.
+    """
+    eff_start = to_java_datetime(start_dt) if start_dt is not None else cur_start
+    eff_finish = to_java_datetime(finish_dt) if finish_dt is not None else cur_finish
+    if eff_start is None or eff_finish is None:
+        return
+    try:
+        bad = bool(eff_finish.isBefore(eff_start))
+    except Exception:
+        bad = str(eff_finish) < str(eff_start)
+    if bad:
+        raise ValidationError(
+            "effective finish date is before effective start date; "
+            "pass --finish explicitly"
+        )
+
+
+def validate_task_inputs(start=None, finish=None, duration=None, percent_complete=None):
+    """Validate task options. Returns (start_dt, finish_dt, duration_obj).
+
+    Raises ValidationError describing the first problem found.
+    """
+    start_dt = parse_date(start) if start else None
+    if start and start_dt is None:
+        raise ValidationError(f"Invalid start date: {start!r} (use YYYY-MM-DD)")
+    finish_dt = parse_date(finish) if finish else None
+    if finish and finish_dt is None:
+        raise ValidationError(f"Invalid finish date: {finish!r} (use YYYY-MM-DD)")
+    dur = parse_duration(duration) if duration else None
+    if duration and dur is None:
+        raise ValidationError(
+            f"Invalid duration: {duration!r} (use e.g. '5d', '40h', '2w')"
+        )
+    if percent_complete is not None and not 0 <= percent_complete <= 100:
+        raise ValidationError("percent-complete must be between 0 and 100")
+    if start_dt and finish_dt and finish_dt < start_dt:
+        raise ValidationError("finish date is before start date")
+    return start_dt, finish_dt, dur

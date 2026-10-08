@@ -29,8 +29,8 @@ def _assignment_to_info(assignment) -> AssignmentInfo:
     )
 
 
-@app.command()
-def list(
+@app.command("list")
+def list_assignments(
     file: str = typer.Argument(..., help="Path to .pod or .xml file"),
     task_id: Optional[int] = typer.Option(None, help="Filter by task UniqueID"),
     resource_id: Optional[int] = typer.Option(None, help="Filter by resource UniqueID"),
