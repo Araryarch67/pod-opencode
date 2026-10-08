@@ -13,19 +13,27 @@ pod-opencode info <file>
 ## convert
 
 ```bash
-pod-opencode convert <input_file> <output.xml>
+pod-opencode convert [--project-name TEXT] <input_file> <output.xml|output.pod>
 ```
 
-Converts POD/XML to MSPDI XML. `output` must end in `.xml`.
+Converts POD/XML to MSPDI XML (`.xml`) or native ProjectLibre `.pod`. For `convert`, options must precede the file arguments. `--project-name` sets the project name shown as the window title in ProjectLibre.
+
+## project name
+
+Every write command (`convert`, `tasks add/update/delete`, `resources add/update/delete`) accepts `--project-name TEXT`. It sets the project's Name and Title, which is what ProjectLibre displays in its title bar (the file name alone does not change it). Set once; the name persists in the output file for chained edits.
+
+## pod output
+
+`--output` accepts `.xml` or `.pod`. A `.pod` file is the native ProjectLibre container (header + separator + embedded MSPDI); use it when the result must open as a pod file. Child tasks added with `--parent-id` are inserted after the parent's subtree with correct outline level and WBS.
 
 ## tasks
 
 ```bash
 pod-opencode tasks list <file> [--filter-name TEXT]
 pod-opencode tasks get <file> <unique_id>
-pod-opencode tasks add <file> --name TEXT [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] --output <file.xml>
-pod-opencode tasks update <file> <unique_id> [--name TEXT] [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--percent-complete FLOAT] --output <file.xml>
-pod-opencode tasks delete <file> <unique_id> --output <file.xml>
+pod-opencode tasks add <file> --name TEXT [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--parent-id UID] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks update <file> <unique_id> [--name TEXT] [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--percent-complete FLOAT] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode tasks delete <file> <unique_id> [--project-name TEXT] --output <file.xml|file.pod>
 ```
 
 - `DATE`: `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`.
@@ -38,9 +46,9 @@ pod-opencode tasks delete <file> <unique_id> --output <file.xml>
 ```bash
 pod-opencode resources list <file>
 pod-opencode resources get <file> <unique_id>
-pod-opencode resources add <file> --name TEXT [--email TEXT] [--max-units FLOAT] --output <file.xml>
-pod-opencode resources update <file> <unique_id> [--name TEXT] [--email TEXT] [--max-units FLOAT] --output <file.xml>
-pod-opencode resources delete <file> <unique_id> --output <file.xml>
+pod-opencode resources add <file> --name TEXT [--email TEXT] [--max-units FLOAT] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode resources update <file> <unique_id> [--name TEXT] [--email TEXT] [--max-units FLOAT] [--project-name TEXT] --output <file.xml|file.pod>
+pod-opencode resources delete <file> <unique_id> [--project-name TEXT] --output <file.xml|file.pod>
 ```
 
 - `--max-units`: `1.0` = full time.

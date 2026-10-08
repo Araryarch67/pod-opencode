@@ -68,6 +68,8 @@ def list(
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "READ_ERROR"}
         typer.echo(json.dumps(error), err=True)

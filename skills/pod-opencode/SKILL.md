@@ -39,7 +39,7 @@ If already inside this repo, just `pip install -e .`. Requires Java JRE on PATH.
 
 ## Core rules
 
-1. **Read `.pod` or `.xml`, write `.xml` only.** MPXJ cannot write POD. All write commands require `--output <file.xml>` and reject `.pod`. Workflow: read `.pod` → modify → write `.xml` → open in ProjectLibre (File > Open works with `.xml`).
+1. **Read `.pod` or `.xml`, write `.xml` or `.pod`.** `.xml` output is plain MSPDI. `.pod` output is the native ProjectLibre container (placeholder header + separator + embedded MSPDI); MPXJ reads it back, and ProjectLibre opens it via its XML recovery path. If ProjectLibre ever refuses a generated `.pod`, fall back to `.xml` (File > Open works) and report it.
 2. **Use UniqueID, not ID.** `get` / `update` / `delete` take `unique_id` (stable). `id` is sequential and may shift.
 3. **Dates are ISO 8601**: `--start 2025-07-01`. Durations are MPXJ human format: `5d`, `40h`, `2w`.
 4. **Parse stdout as JSON.** Never scrape human text; there is none.
@@ -48,22 +48,24 @@ If already inside this repo, just `pip install -e .`. Requires Java JRE on PATH.
 
 ```bash
 pod-opencode info <file>
-pod-opencode convert <input.pod|xml> <output.xml>
+pod-opencode convert [--project-name TEXT] <input.pod|xml> <output.xml|output.pod>   # option before file args
 
 pod-opencode tasks list <file> [--filter-name TEXT]
 pod-opencode tasks get <file> <unique_id>
-pod-opencode tasks add <file> --name TEXT [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] --output <out.xml>
-pod-opencode tasks update <file> <unique_id> [--name TEXT] [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--percent-complete FLOAT] --output <out.xml>
-pod-opencode tasks delete <file> <unique_id> --output <out.xml>
+pod-opencode tasks add <file> --name TEXT [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--parent-id UID] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks update <file> <unique_id> [--name TEXT] [--start DATE] [--finish DATE] [--duration TEXT] [--notes TEXT] [--percent-complete FLOAT] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode tasks delete <file> <unique_id> [--project-name TEXT] --output <out.xml|out.pod>
 
 pod-opencode resources list <file>
 pod-opencode resources get <file> <unique_id>
-pod-opencode resources add <file> --name TEXT [--email TEXT] [--max-units FLOAT] --output <out.xml>
-pod-opencode resources update <file> <unique_id> [--name TEXT] [--email TEXT] [--max-units FLOAT] --output <out.xml>
-pod-opencode resources delete <file> <unique_id> --output <out.xml>
+pod-opencode resources add <file> --name TEXT [--email TEXT] [--max-units FLOAT] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode resources update <file> <unique_id> [--name TEXT] [--email TEXT] [--max-units FLOAT] [--project-name TEXT] --output <out.xml|out.pod>
+pod-opencode resources delete <file> <unique_id> [--project-name TEXT] --output <out.xml|out.pod>
 
 pod-opencode assignments list <file> [--task-id INT] [--resource-id INT]
 ```
+
+`--project-name` sets the project name shown as the window title in ProjectLibre. Set it once on `convert` (or any write); it persists in the file for chained edits.
 
 Full flags and JSON schemas: see `references/commands.md` and `references/json-schemas.md`.
 

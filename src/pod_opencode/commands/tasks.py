@@ -4,9 +4,18 @@ import json
 from typing import Optional
 
 from pod_opencode.reader import read_project
-from pod_opencode.writer import write_project
+from pod_opencode.writer import apply_project_name, write_output
 from pod_opencode.models import TaskInfo, TaskListResponse, Predecessor, WriteSuccess
-from pod_opencode.utils import java_date_to_iso, duration_to_str, parse_date, jstr
+from pod_opencode.utils import (
+    java_date_to_iso,
+    duration_to_str,
+    parse_date,
+    parse_duration,
+    to_java_datetime,
+    jstr,
+    jint,
+    next_ids,
+)
 
 app = typer.Typer()
 
@@ -87,6 +96,8 @@ def list(
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "READ_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -107,7 +118,7 @@ def get(
 
     try:
         project = read_project(str(file_path))
-        task = project.getTaskByUniqueID(unique_id)
+        task = project.getTaskByUniqueID(jint(unique_id))
 
         if not task:
             error = {"error": f"Task not found: {unique_id}", "code": "TASK_NOT_FOUND"}
@@ -121,6 +132,8 @@ def get(
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "READ_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -136,6 +149,9 @@ def add(
     duration: Optional[str] = typer.Option(None, help="Duration (e.g., '5d', '40h')"),
     notes: Optional[str] = typer.Option(None, help="Task notes"),
     parent_id: Optional[int] = typer.Option(None, help="Parent task UniqueID"),
+    project_name: Optional[str] = typer.Option(
+        None, help="Set project name (window title in ProjectLibre)"
+    ),
     output: str = typer.Option(..., help="Output .xml file"),
 ):
     """Add a new task to the project."""
@@ -145,44 +161,81 @@ def add(
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
 
-    if output.endswith(".pod"):
-        error = {
-            "error": "Output must be .xml (MPXJ cannot write POD format)",
-            "code": "INVALID_OUTPUT_FORMAT",
-        }
-        typer.echo(json.dumps(error), err=True)
-        raise typer.Exit(1)
-
     try:
         project = read_project(str(file_path))
 
+        # NOTE: builtin list() is shadowed by the list command in this
+        # module, so materialise the Java list with a comprehension.
+        ordered = sorted(
+            [t for t in project.getTasks()], key=lambda t: int(t.getID() or 0)
+        )
+        _, new_uid = next_ids(project.getTasks())
+        parent_task = project.getTaskByUniqueID(jint(parent_id)) if parent_id else None
+
         new_task = project.addTask()
+        new_task.setUniqueID(jint(new_uid))
         new_task.setName(name)
         if notes:
             new_task.setNotes(notes)
 
+        if parent_task is not None:
+            parent_level = (
+                int(parent_task.getOutlineLevel())
+                if parent_task.getOutlineLevel() is not None
+                else 1
+            )
+            parent_task.addChildTask(new_task)
+            new_task.setOutlineLevel(jint(parent_level + 1))
+            # Insert right after the parent's subtree so the writer
+            # (which sorts by ID) keeps outline order. Shift later IDs.
+            idx = ordered.index(parent_task)
+            end = idx + 1
+            while (
+                end < len(ordered)
+                and int(ordered[end].getOutlineLevel() or 1) > parent_level
+            ):
+                end += 1
+            for later in ordered[end:]:
+                later.setID(jint(int(later.getID()) + 1))
+            new_task.setID(jint(int(ordered[end - 1].getID()) + 1))
+            parent_wbs = jstr(parent_task.getWBS()) if parent_task.getWBS() else None
+            if parent_wbs:
+                siblings = sum(
+                    1
+                    for t in project.getTasks()
+                    if t.getParentTask() is not None
+                    and t.getParentTask() == parent_task
+                )
+                new_task.setWBS(f"{parent_wbs}.{siblings}")
+        else:
+            new_task.setOutlineLevel(jint(1))
+            top_wbs = []
+            for t in ordered:
+                if int(t.getOutlineLevel() or 1) == 1 and t.getWBS():
+                    try:
+                        top_wbs.append(int(str(t.getWBS())))
+                    except ValueError:
+                        pass
+            new_task.setWBS(str(max(top_wbs or [0]) + 1))
+            new_task.setID(jint(max([int(t.getID()) for t in ordered] or [0]) + 1))
+
         if start:
             start_dt = parse_date(start)
             if start_dt:
-                import jpype
-
-                java_date = jpype.java.util.Date(int(start_dt.timestamp() * 1000))
-                new_task.setStart(java_date)
+                new_task.setStart(to_java_datetime(start_dt))
 
         if finish:
             finish_dt = parse_date(finish)
             if finish_dt:
-                import jpype
+                new_task.setFinish(to_java_datetime(finish_dt))
 
-                java_date = jpype.java.util.Date(int(finish_dt.timestamp() * 1000))
-                new_task.setFinish(java_date)
+        if duration:
+            dur = parse_duration(duration)
+            if dur is not None:
+                new_task.setDuration(dur)
 
-        if parent_id:
-            parent_task = project.getTaskByUniqueID(parent_id)
-            if parent_task:
-                parent_task.addChildTask(new_task)
-
-        write_project(project, output)
+        apply_project_name(project, project_name)
+        write_output(project, output)
 
         response = WriteSuccess(
             output=output, affected_unique_id=new_task.getUniqueID()
@@ -197,6 +250,8 @@ def add(
         error = {"error": str(e), "code": "INVALID_OUTPUT_FORMAT"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "WRITE_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -217,6 +272,9 @@ def update(
     percent_complete: Optional[float] = typer.Option(
         None, help="Percent complete (0-100)"
     ),
+    project_name: Optional[str] = typer.Option(
+        None, help="Set project name (window title in ProjectLibre)"
+    ),
     output: str = typer.Option(..., help="Output .xml file"),
 ):
     """Update an existing task."""
@@ -226,17 +284,9 @@ def update(
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
 
-    if output.endswith(".pod"):
-        error = {
-            "error": "Output must be .xml (MPXJ cannot write POD format)",
-            "code": "INVALID_OUTPUT_FORMAT",
-        }
-        typer.echo(json.dumps(error), err=True)
-        raise typer.Exit(1)
-
     try:
         project = read_project(str(file_path))
-        task = project.getTaskByUniqueID(unique_id)
+        task = project.getTaskByUniqueID(jint(unique_id))
 
         if not task:
             error = {"error": f"Task not found: {unique_id}", "code": "TASK_NOT_FOUND"}
@@ -250,21 +300,20 @@ def update(
         if start:
             start_dt = parse_date(start)
             if start_dt:
-                import jpype
-
-                java_date = jpype.java.util.Date(int(start_dt.timestamp() * 1000))
-                task.setStart(java_date)
+                task.setStart(to_java_datetime(start_dt))
         if finish:
             finish_dt = parse_date(finish)
             if finish_dt:
-                import jpype
-
-                java_date = jpype.java.util.Date(int(finish_dt.timestamp() * 1000))
-                task.setFinish(java_date)
+                task.setFinish(to_java_datetime(finish_dt))
+        if duration:
+            dur = parse_duration(duration)
+            if dur is not None:
+                task.setDuration(dur)
         if percent_complete is not None:
             task.setPercentageComplete(percent_complete)
 
-        write_project(project, output)
+        apply_project_name(project, project_name)
+        write_output(project, output)
 
         response = WriteSuccess(output=output, affected_unique_id=unique_id)
         result = response.model_dump_json(indent=2)
@@ -277,6 +326,8 @@ def update(
         error = {"error": str(e), "code": "INVALID_OUTPUT_FORMAT"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "WRITE_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -287,6 +338,9 @@ def update(
 def delete(
     file: str = typer.Argument(..., help="Path to .pod or .xml file"),
     unique_id: int = typer.Argument(..., help="Task UniqueID"),
+    project_name: Optional[str] = typer.Option(
+        None, help="Set project name (window title in ProjectLibre)"
+    ),
     output: str = typer.Option(..., help="Output .xml file"),
 ):
     """Delete a task from the project."""
@@ -296,17 +350,9 @@ def delete(
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
 
-    if output.endswith(".pod"):
-        error = {
-            "error": "Output must be .xml (MPXJ cannot write POD format)",
-            "code": "INVALID_OUTPUT_FORMAT",
-        }
-        typer.echo(json.dumps(error), err=True)
-        raise typer.Exit(1)
-
     try:
         project = read_project(str(file_path))
-        task = project.getTaskByUniqueID(unique_id)
+        task = project.getTaskByUniqueID(jint(unique_id))
 
         if not task:
             error = {"error": f"Task not found: {unique_id}", "code": "TASK_NOT_FOUND"}
@@ -314,7 +360,8 @@ def delete(
             raise typer.Exit(1)
 
         project.removeTask(task)
-        write_project(project, output)
+        apply_project_name(project, project_name)
+        write_output(project, output)
 
         response = WriteSuccess(output=output, affected_unique_id=unique_id)
         result = response.model_dump_json(indent=2)
@@ -327,6 +374,8 @@ def delete(
         error = {"error": str(e), "code": "INVALID_OUTPUT_FORMAT"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "WRITE_ERROR"}
         typer.echo(json.dumps(error), err=True)

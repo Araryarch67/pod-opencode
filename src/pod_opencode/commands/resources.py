@@ -4,9 +4,9 @@ import json
 from typing import Optional
 
 from pod_opencode.reader import read_project
-from pod_opencode.writer import write_project
+from pod_opencode.writer import apply_project_name, write_output
 from pod_opencode.models import ResourceInfo, ResourceListResponse, WriteSuccess
-from pod_opencode.utils import jstr
+from pod_opencode.utils import jstr, jint, next_ids
 
 
 app = typer.Typer()
@@ -54,6 +54,8 @@ def list(
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "READ_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -74,7 +76,7 @@ def get(
 
     try:
         project = read_project(str(file_path))
-        resource = project.getResourceByUniqueID(unique_id)
+        resource = project.getResourceByUniqueID(jint(unique_id))
 
         if not resource:
             error = {
@@ -91,6 +93,8 @@ def get(
         error = {"error": str(e), "code": "FILE_NOT_FOUND"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "READ_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -103,6 +107,9 @@ def add(
     name: str = typer.Option(..., help="Resource name"),
     email: Optional[str] = typer.Option(None, help="Email address"),
     max_units: Optional[float] = typer.Option(None, help="Max units (e.g., 1.0)"),
+    project_name: Optional[str] = typer.Option(
+        None, help="Set project name (window title in ProjectLibre)"
+    ),
     output: str = typer.Option(..., help="Output .xml file"),
 ):
     """Add a new resource to the project."""
@@ -112,25 +119,21 @@ def add(
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
 
-    if output.endswith(".pod"):
-        error = {
-            "error": "Output must be .xml (MPXJ cannot write POD format)",
-            "code": "INVALID_OUTPUT_FORMAT",
-        }
-        typer.echo(json.dumps(error), err=True)
-        raise typer.Exit(1)
-
     try:
         project = read_project(str(file_path))
 
+        new_id, new_uid = next_ids(project.getResources())
         new_resource = project.addResource()
+        new_resource.setID(jint(new_id))
+        new_resource.setUniqueID(jint(new_uid))
         new_resource.setName(name)
         if email:
             new_resource.setEmailAddress(email)
         if max_units is not None:
             new_resource.setMaxUnits(max_units)
 
-        write_project(project, output)
+        apply_project_name(project, project_name)
+        write_output(project, output)
 
         response = WriteSuccess(
             output=output, affected_unique_id=new_resource.getUniqueID()
@@ -145,6 +148,8 @@ def add(
         error = {"error": str(e), "code": "INVALID_OUTPUT_FORMAT"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "WRITE_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -158,6 +163,9 @@ def update(
     name: Optional[str] = typer.Option(None, help="New resource name"),
     email: Optional[str] = typer.Option(None, help="New email address"),
     max_units: Optional[float] = typer.Option(None, help="New max units"),
+    project_name: Optional[str] = typer.Option(
+        None, help="Set project name (window title in ProjectLibre)"
+    ),
     output: str = typer.Option(..., help="Output .xml file"),
 ):
     """Update an existing resource."""
@@ -167,17 +175,9 @@ def update(
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
 
-    if output.endswith(".pod"):
-        error = {
-            "error": "Output must be .xml (MPXJ cannot write POD format)",
-            "code": "INVALID_OUTPUT_FORMAT",
-        }
-        typer.echo(json.dumps(error), err=True)
-        raise typer.Exit(1)
-
     try:
         project = read_project(str(file_path))
-        resource = project.getResourceByUniqueID(unique_id)
+        resource = project.getResourceByUniqueID(jint(unique_id))
 
         if not resource:
             error = {
@@ -194,7 +194,8 @@ def update(
         if max_units is not None:
             resource.setMaxUnits(max_units)
 
-        write_project(project, output)
+        apply_project_name(project, project_name)
+        write_output(project, output)
 
         response = WriteSuccess(output=output, affected_unique_id=unique_id)
         result = response.model_dump_json(indent=2)
@@ -207,6 +208,8 @@ def update(
         error = {"error": str(e), "code": "INVALID_OUTPUT_FORMAT"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "WRITE_ERROR"}
         typer.echo(json.dumps(error), err=True)
@@ -217,6 +220,9 @@ def update(
 def delete(
     file: str = typer.Argument(..., help="Path to .pod or .xml file"),
     unique_id: int = typer.Argument(..., help="Resource UniqueID"),
+    project_name: Optional[str] = typer.Option(
+        None, help="Set project name (window title in ProjectLibre)"
+    ),
     output: str = typer.Option(..., help="Output .xml file"),
 ):
     """Delete a resource from the project."""
@@ -226,17 +232,9 @@ def delete(
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
 
-    if output.endswith(".pod"):
-        error = {
-            "error": "Output must be .xml (MPXJ cannot write POD format)",
-            "code": "INVALID_OUTPUT_FORMAT",
-        }
-        typer.echo(json.dumps(error), err=True)
-        raise typer.Exit(1)
-
     try:
         project = read_project(str(file_path))
-        resource = project.getResourceByUniqueID(unique_id)
+        resource = project.getResourceByUniqueID(jint(unique_id))
 
         if not resource:
             error = {
@@ -247,7 +245,8 @@ def delete(
             raise typer.Exit(1)
 
         project.removeResource(resource)
-        write_project(project, output)
+        apply_project_name(project, project_name)
+        write_output(project, output)
 
         response = WriteSuccess(output=output, affected_unique_id=unique_id)
         result = response.model_dump_json(indent=2)
@@ -260,6 +259,8 @@ def delete(
         error = {"error": str(e), "code": "INVALID_OUTPUT_FORMAT"}
         typer.echo(json.dumps(error), err=True)
         raise typer.Exit(1)
+    except typer.Exit:
+        raise
     except Exception as e:
         error = {"error": str(e), "code": "WRITE_ERROR"}
         typer.echo(json.dumps(error), err=True)
